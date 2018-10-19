@@ -1,0 +1,5 @@
+# This file tells GitHub to ignore afiles in certain folders when using the linguist library
+
+VasoTracker_Pressure_Monitor/* linguist-vendored
+VasoTracker_Temperature_Controller/* linguist-vendored
+VasoTracker_Vessel_Chamber/* linguist-vendored
