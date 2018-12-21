@@ -1,6 +1,6 @@
 VasoTracker diameter tracking software
 ======
-<img src=[link](https://github.com/VasoTracker/VasoTracker/VasoTracker Software/Screenshot.gif) width="400" align="right">
+<img src="https://github.com/VasoTracker/VasoTracker/VasoTracker_Software/Screenshot.jpg) width="400" align="right">
 
 An Arduino-based pressure monitor for the VasoTracker myograph system.
 
@@ -22,7 +22,7 @@ LCD Shield|iTead Studio|1602 LCD|1|3.98|3.98
 Flow through pressure transducers|Honeywell|26PCDFG5G|2|36.72|73.44
 12" 4-Pin Jumper Wire|Sparkfun Electronics|PRT-10374|2|1.48|2.96
 Arduino R3 Stackable Headers|Sparkfun Electronics|PRT-10007|1|1.14|1.14
-LEGO™ Encolsure|LEGO|-|-|-|-
+LEGO™ Encolsure|LEGO|-|-|-|-0
  | | | | |Subtotal|117.33
 
 
