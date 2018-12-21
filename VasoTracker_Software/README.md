@@ -1,6 +1,6 @@
 VasoTracker diameter tracking software
 ======
-<img src="https://github.com/VasoTracker/VasoTracker/VasoTracker_Software/Resources/Screenshot.gif" width="400" align="right">
+<img src="https://github.com/VasoTracker/VasoTracker_Software/Resources/Screenshot.gif" width="400" align="right">
 
 An Arduino-based pressure monitor for the VasoTracker myograph system.
 
