@@ -1,10 +1,8 @@
 VasoTracker diameter tracking software
 ======
-<img src="https://github.com/VasoTracker/VasoTracker/blob/master/VasoTracker_Software/Resources/Screenshot.gif" width="800" align="center">
-
-VasoTracker/VasoTracker_Software/Resources/Screenshot.gif
-
 Software for automatic diameter tracking in pressure myography experiments.
+
+<img src="https://github.com/VasoTracker/VasoTracker/blob/master/VasoTracker_Software/Resources/Screenshot.gif" align="center">
 
 Written in [Python 2.7](https://www.python.org/ "Python 2.7"), and making use of [μManager](https://micro-manager.org/) camera control libraries
 
