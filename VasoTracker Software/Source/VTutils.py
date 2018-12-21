@@ -231,9 +231,12 @@ def process_ddts(ddts,thresh,nx,scale):
         
         try:
             # The first inner diameter point is the first big (or the biggest) positive peak after the initial negative peak
-            test = [item for item in peaks_indices if item > OD1_ and item < nx/2]
+            #test = [item for item in peaks_indices if item > OD1_ and item < nx/2]
+            test = [item for item in peaks_indices if item > OD1_ and item < (OD1_+(OD2_-OD1_)/2)]#nx/2]
+
             arg3 = 0 # This arg for the first!
             ID1_ = test[arg3]
+            '''
 
             # Over writing this for the biggst peak
             #print test
@@ -243,16 +246,19 @@ def process_ddts(ddts,thresh,nx,scale):
             #print arg4
             ID1_ = test[arg4]
             #print "Inner Diameter 1 = ", ID1_
-
+            '''
             # The second inner diameter point is the last big negative peak before the big positive
-            test2 = [item for item in valley_indices if item < OD2_ and item > nx/2]
+            #test2 = [item for item in valley_indices if item < OD2_ and item > nx/2]
+            test2 = [item for item in valley_indices if item < OD2_ and item > (OD1_-(OD2_-OD1_)/2)]#nx/2]
             ID2_ = test2[-1]
             #print "Inner Diameter 2 = ", ID2_
 
+            '''
             # Over writing this for the biggst peak
             test4 = [ddt[item] for item in test2]
             arg5 = np.argmax(np.absolute(test2))
             ID2_ = test2[arg5]
+            '''
 
 
         except:
@@ -277,8 +283,6 @@ def process_ddts(ddts,thresh,nx,scale):
     STDEVOD = np.std(ODlist)
     STDEVID = np.std(IDlist)
 
-    print OD
-    print STDEVOD
 
     ODlist2 = [el for el in ODlist if (OD - STDEVOD) < el < (OD + STDEVOD)]
     IDlist2 = [el for el in IDlist if (ID - STDEVID) < el < (ID + STDEVID)]
@@ -286,4 +290,60 @@ def process_ddts(ddts,thresh,nx,scale):
     OD = np.average(ODlist2)
     ID = np.average(IDlist2)
 
-    return(outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID)
+    ODS_flag = [1 if (OD - 3*STDEVOD) < el < (OD + 3*STDEVOD) else 0 for i,el in enumerate(ODS) ]
+    IDS_flag = [1 if (ID - 3*STDEVID) < el < (ID + 3*STDEVID) else 0 for i,el in enumerate(IDS) ]
+
+    ODS_zscore = is_outlier(np.asarray(ODS)).tolist()
+    IDS_zscore = is_outlier(np.asarray(IDS)).tolist()
+
+    ODS_flag = [0 if el else 1 for el in ODS_zscore]
+    IDS_flag = [0 if el else 1 for el in IDS_zscore]
+
+
+    ODlist2 = [el1 for el1,el2 in zip(ODlist, ODS_flag) if el2 == 1]
+    IDlist2 = [el1 for el1,el2 in zip(IDlist, ODS_flag) if el2 == 1]
+
+    OD = np.average(ODlist2)
+    ID = np.average(IDlist2)
+
+    return(outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID,ODS_flag,IDS_flag,ODlist, IDlist)
+
+
+
+
+
+### Outlier function is from here:
+### https://stackoverflow.com/questions/22354094/pythonic-way-of-detecting-outliers-in-one-dimensional-observation-data
+
+def is_outlier(points, thresh=3.5):
+    """
+    Returns a boolean array with True if points are outliers and False 
+    otherwise.
+
+    Parameters:
+    -----------
+        points : An numobservations by numdimensions array of observations
+        thresh : The modified z-score to use as a threshold. Observations with
+            a modified z-score (based on the median absolute deviation) greater
+            than this value will be classified as outliers.
+
+    Returns:
+    --------
+        mask : A numobservations-length boolean array.
+
+    References:
+    ----------
+        Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+        Handle Outliers", The ASQC Basic References in Quality Control:
+        Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
+    """
+    if len(points.shape) == 1:
+        points = points[:,None]
+    median = np.median(points, axis=0)
+    diff = np.sum((points - median)**2, axis=-1)
+    diff = np.sqrt(diff)
+    med_abs_deviation = np.median(diff)
+
+    modified_z_score = 0.6745 * diff / med_abs_deviation
+
+    return modified_z_score > thresh
