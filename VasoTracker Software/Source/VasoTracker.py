@@ -43,10 +43,11 @@
 ## Copyright: Copyright 2018, VasoTracker
 ## Credits: Penelope F Lawton, Matthew D Lee, and Calum Wilson
 ## License: BSD 3-Clause License
-## Version: 1.0.0
+## Version: 1.0.1
 ## Maintainer: Calum Wilson
-## Email: c.wilson.strath@gmail.com
+## Email: vasotracker@gmail.com
 ## Status: Production
+## Last updated: 20181221
 ## 
 ##################################################
 
@@ -54,7 +55,9 @@
 ## https://www.safaribooksonline.com/library/view/python-cookbook/0596001673/ch09s07.html
 ## http://code.activestate.com/recipes/82965-threads-tkinter-and-asynchronous-io/
 ## https://www.physics.utoronto.ca/~phy326/python/Live_Plot.py
-
+## http://forum.arduino.cc/index.php?topic=225329.msg1810764#msg1810764
+## https://stackoverflow.com/questions/9917280/using-draw-in-pil-tkinter
+## https://stackoverflow.com/questions/37334106/opening-image-on-canvas-cropping-the-image-and-update-the-canvas
 
 from __future__ import division
 # Tkinter imports
@@ -84,6 +87,8 @@ import csv
 from skimage import io
 import skimage
 from skimage import measure
+import serial
+import win32com.client
 
 # Import Vasotracker functions
 import VTutils
@@ -99,7 +104,8 @@ import sys
 sys.path.append('C:\Program Files\Micro-Manager-1.4')
 import MMCorePy
 '''
-# Import matplotlib
+
+# matplotlib imports
 import matplotlib
 #matplotlib.use('Qt5Agg') 
 #matplotlib.use('Qt4Agg', warn=True)
@@ -109,6 +115,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 import matplotlib.pyplot as plt
 from matplotlib.backends import backend_qt4agg
 from matplotlib import pyplot
+
 
 class GuiPart(tk.Frame):
 
@@ -122,10 +129,41 @@ class GuiPart(tk.Frame):
         self.grid(sticky=N+S+E+W)
         top = self.winfo_toplevel()
         top.rowconfigure(0, weight=1)
+        top.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
         self.columnconfigure(0, weight=1)
         self.filename = self.get_file_name()
-        self.multiplication_factor = self.get_scale()
+        print self.filename        
+        self.Arduino = Arduino(self)
+        self.ports = self.Arduino.getports()
+        self.timeit2 = TimeIt2()
+        self.OD = None
+
+    # Scale setting
+        global multiplication_factor
+        multiplication_factor = 1
+        self.multiplication_factor = multiplication_factor
+
+    # Exposure setting
+        global exposure
+        exposure = 50
+        self.exposure = exposure
+
+    # Acquisition rate setting
+        global acq_rate
+        acq_rate = 2
+        self.acq_rate = acq_rate
+
+    # Record interval setting
+        global rec_interval
+        rec_interval = 1
+        self.rec_interval = rec_interval
+
+    # Data acquisition lines setting
+        global number
+        num_lines = 20
+        self.num_lines = num_lines
+
         self.initUI(endCommand)
 
     # Open the csv file and then clear it
@@ -135,20 +173,32 @@ class GuiPart(tk.Frame):
     # Add the headers
         with open((self.filename.name), 'ab') as f:
             w=csv.writer(f, quoting=csv.QUOTE_ALL)
-            w.writerow(("Time","Outer Diameter", "Inner Diameter"))
+            w.writerow(("Time","Outer Diameter", "Inner Diameter", 'Temperature (oC)', 'Pressure 1 (mmHg)', 'Pressure 2 (mmHg)', 'Avg Pressure (mmHg)'))
 
-    # Add file for table
-        #head,tail = os.path.split(self.filename.name)
+    # Add the file for the outerdiameter profiles
         self.txt_file = os.path.splitext(self.filename.name)[0]
         print "tail = ", self.txt_file
+        self.profile_file = self.txt_file + ' - ODProfiles' + '.csv'
+        with open((self.profile_file), 'w+') as g:
+            v=csv.writer(g, quoting=csv.QUOTE_ALL)
+            column_headings = 'Time (s)', 'Profile 1', 'Profile 2', "Profile 3", "..."
+            v.writerow(column_headings)
+
+    # Add the file for the innerdiameter profiles
+        self.profile_file2 = self.txt_file + ' - IDProfiles' + '.csv'
+        with open((self.profile_file2), 'w+') as g:
+            v=csv.writer(g, quoting=csv.QUOTE_ALL)
+            column_headings = 'Time (s)', 'Profile 1', 'Profile 2', "Profile 3", "..."
+            v.writerow(column_headings)
+
+    # Add file for table
         self.txt_file = self.txt_file + ' - Table' + '.csv'
         g = open(self.txt_file, "w+")
         g.close()
         with open((self.txt_file), 'ab') as g:
                 v=csv.writer(g, quoting=csv.QUOTE_ALL)
-                column_headings = 'Time (s)', 'Label', 'Diameter', 'Pressure 1 (mmHg)', 'Pressure 2 (mmHg)'
+                column_headings = 'Time (s)', 'Label', 'Diameter', "P1", "P2", "max_percent"
                 v.writerow(column_headings)
-
 
     # Function for getting the save file.
     def get_file_name(self):
@@ -157,24 +207,30 @@ class GuiPart(tk.Frame):
         savename = now.strftime("%Y%m%d")
         f = tkFileDialog.asksaveasfile(mode='w', defaultextension=".csv", initialdir="Results\\", initialfile=savename)
         if f:
+            print "f = ", f
             return(f)            
         else: # asksaveasfile return `None` if dialog closed with "cancel".
-            if tmb.askquestion("No save file selected", "Do you want to quit VasoTracker?", icon='warning'):
+            if tmb.askquestion("No save file selected", "Do you want to quit VasoTracker?", icon='warning') == "yes":
                 self.endApplication()
             else:
                 f = self.get_file_name()
-
-    # Function for getting the save file.
-    def get_scale(self):
-        scale = tkSimpleDialog.askfloat("Input", "How many um per pixel?")
-        if scale is None:
-            scale = 1
-        return(scale)
-        
+                return (f)
 
     # Function for writing to the save file
     def writeToFile(self,data):
         with open((self.filename.name), 'ab') as f:
+            w=csv.writer(f, quoting=csv.QUOTE_ALL)
+            w.writerow(data)
+
+    # Function for writing to the save file
+    def writeToFile2(self,data):
+        with open((self.profile_file), 'ab') as f:
+            w=csv.writer(f, quoting=csv.QUOTE_ALL)
+            w.writerow(data)
+
+    # Function for writing to the save file
+    def writeToFile3(self,data):
+        with open((self.profile_file2), 'ab') as f:
             w=csv.writer(f, quoting=csv.QUOTE_ALL)
             w.writerow(data)
 
@@ -187,7 +243,6 @@ class GuiPart(tk.Frame):
     def average_checkbox(self, window, text):
         avg_checkbox = ttk.Checkbutton(window, text=text)
         avg_checkbox.grid(row=0, columnspan=4, padx=3, pady=3)
-
 
     # Second Function for initialising the GUI
     def initUI(self,endCommand):
@@ -208,7 +263,11 @@ class GuiPart(tk.Frame):
 
     # Make the toolbar along the top
         self.toolbar = ToolBar(self)#ttk.Frame(root, height=150)
-        self.toolbar.grid(row=0, column=0,rowspan=1,columnspan=3, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
+        self.toolbar.grid(row=0, column=0,rowspan=1,columnspan=4, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
+        self.toolbar.grid(sticky='nswe')
+        self.toolbar.rowconfigure(0, weight=1)
+        self.toolbar.columnconfigure(0, weight=1)
+        #self.toolbar.grid_propagate(0)
 
     # Make the status bar along the bottom
         self.status_bar = ttk.Label(text = 'Thank you for using VasoTracker.', relief=SUNKEN, anchor='w')
@@ -216,119 +275,213 @@ class GuiPart(tk.Frame):
 
     # Make the graph frame
         self.graphframe = GraphFrame(self)
-        self.graphframe.grid(row=1, column=0, rowspan=3, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
+        self.graphframe.grid(row=1, column=0, rowspan=4,columnspan=2, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
+        self.graphframe.grid(sticky='nswe')
+        #self.graphframe.rowconfigure(0, weight=1)
+        #self.graphframe.columnconfigure(0, weight=1)
+        #self.graphframe.grid_propagate(0)
  
     # Make the table frame
         self.tableframe = TableFrame(self)
-        self.tableframe.grid(row=1, column=2, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
+        self.tableframe.grid(row=1, column=3,rowspan=1,columnspan=1, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
+        self.tableframe.grid(sticky='nwe')
+        #self.tableframe.rowconfigure(0, weight=1)
+        #self.tableframe.columnconfigure(0, weight=1)
+        #self.tableframe.grid_propagate(0)
  
+        self.toolbar.update()
+        self.status_bar.update()
+        #self.graphframe.update()
+        self.tableframe.update()
+        self.toolbar.update()
+
     # Make the Camera Frame bottom right
         self.cameraframe = CameraFrame(self)
-        self.cameraframe.grid(row=2, column=2, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
-        if self.toolbar.start_flag:
-            mmc.startContinuousSequenceAcquisition(500)
+        self.cameraframe.grid(row=2, column=3,rowspan=1,columnspan=2, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
+        self.cameraframe.grid(sticky='nswe')
+        #self.cameraframe.rowconfigure(0, weight=3)
+        #self.cameraframe.columnconfigure(0, weight=2)
+        #self.cameraframe.grid_propagate(0)
+
+        #if self.toolbar.start_flag:
+        #    mmc.startContinuousSequenceAcquisition(500)
 
     # Count function for reading in with FakeCamera
         self.count = 0   
+    # Count function for resizing on first image acquisition
+        self.count2 = 0      
+
+    def sortdata(self,temppres):
+        #print temppres
+        #print "Length of the data = ", len(temppres)
+        T = np.nan
+        P1 = np.nan
+        P2 = np.nan
+        for i,data in enumerate(temppres):
+            #print "length of data = ", len(data)#val = ser.readline().strip('\n\r').split(';')
+            #print "this is what we are looking at",data
+            if len(data) > 0:
+                val = data[0].strip('\n\r').split(';')
+                val = val[:-1]
+                val = [el.split(':') for el in val]
+                if val[0][0] == "Temperature":
+                    temp = float(val[0][1])
+                    print "this is a temp = ", temp
+                    T = temp
+                elif val[0][0] == "Pressure1":
+                    pres1 = float(val[0][1])
+                    pres2 = float(val[1][1])
+                    print "this is a pressure = ", pres1
+                    P1,P2 = pres1,pres2
+
+        return P1,P2,T
+
 
 
     # This function will process all of the incoming images
     def processIncoming(self, outers, inners, timelist):
         """Handle all messages currently in the queue, if any."""
         while self.queue.qsize(  ):
-            print "Queue size = ", self.queue.qsize(  )
-            try:
-                if self.toolbar.record_flag:
-                    if self.count == 0:
-                        global start_time
-                        start_time=time.time()
-                    # This is for loading in a video as an example!
-                    try:
-                        mmc.setProperty('Focus', "Position", self.count)
-                    except:
-                        pass
+            #print "Queue size = ", self.queue.qsize(  )
+            with self.timeit2:
+                try:
+                    if self.toolbar.record_flag:
+                        if self.count == 0:
+                            global start_time
+                            start_time=time.time()
+                        # This is for loading in a video as an example!
+                        try:
+                            mmc.setProperty('Focus', "Position", self.count)
+                            #print "the count is this:", self.count
+                        except:
+                            pass
+                        
+                    #Get the image
+                        msg = self.queue.get(0)
 
-                #Get the image
-                    msg = self.queue.get(0)
+                    # Check contents of message and do whatever is needed. As a simple test, print it (in real life, you would suitably update the GUI's display in a richer fashion).
+                        #Get the time
+                        timenow = time.time() - start_time
+                        #print "Checkbox Status = ", self.toolbar.record_is_checked.get()
+                        if self.toolbar.record_is_checked.get() == 1:# and self.count%self.rec_interval == 0:
+                            timenow2 = int(timenow)
+                            directory = os.path.join(head, 'RawTiff\\')
+                            if not os.path.exists(directory):
+                                os.makedirs(directory)
+                            gfxPath = os.path.join(directory, '%s_f=%s.tiff' % (os.path.splitext(tail)[0],str(self.count).zfill(6))) 
+                            skimage.io.imsave(gfxPath, msg)
+                        if self.toolbar.ROI_is_checked.get() == 1:
+                            self.ROI = ((self.cameraframe.start_x,self.cameraframe.start_y), (self.cameraframe.end_x, self.cameraframe.end_y))
+                        else: 
+                            self.ROI = ((0,0),(int(msg.shape[1]),int(msg.shape[0])) )    
 
-                # Check contents of message and do whatever is needed. As a simple test, print it (in real life, you would suitably update the GUI's display in a richer fashion).
-                    #Get the time
-                    timenow = time.time() - start_time
-                    print "Checkbox Status = ", self.toolbar.record_is_checked.get()
-                    if self.toolbar.record_is_checked.get() == 1 and self.count%60 == 0:
-                        print head
-                        print tail
-                        timenow2 = int(timenow)
-                        gfxPath = os.path.join(head, '%s_t=%ss.tiff' % (os.path.splitext(tail)[0],timenow2)) 
-                        skimage.io.imsave(gfxPath, msg)
-                    #print msg
-                    self.calculate_diameter = Calculate_Diameter(self,self.multiplication_factor)
-                    global OD
-                    global ID
-                    outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID,start = self.calculate_diameter.calc(msg, self.multiplication_factor)
-                    if self.count == 0:
-                        global initOD, initID
-                        initOD = OD
-                        initID = ID
-                    params = timenow,outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,start
-                    savedata = timenow,OD,ID
-                    self.writeToFile(savedata)
-                    self.cameraframe.process_queue(params,msg)
-                    timelist.append(timenow)
-                    #print timelist
-                    outers.append(OD)
-                    inners.append(ID)
-                    self.graphframe.plot(timelist,outers,inners,self.toolbar.xlims, self.toolbar.ylims, self.toolbar.xlims2, self.toolbar.ylims2)    
-                    self.count += 1
-                else:
-                    msg = self.queue.get(0)
-                    params = 0,0,0,0,0,0,0
-                    self.cameraframe.process_queue(params,msg)  
-                
+                        self.calculate_diameter = Calculate_Diameter(self,self.num_lines,self.multiplication_factor, self.ROI)
+                        global OD
+                        global ID, T, P1, P2
+                        outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID,start,diff, ODS_flag,IDS_flag,ODlist,IDlist = self.calculate_diameter.calc(msg, self.num_lines,self.multiplication_factor, self.ROI)
+                        if self.count == 0:
+                            global initOD, initID
+                            initOD = OD
+                            initID = ID
+                        params = timenow,outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,start,diff,ODS_flag,IDS_flag, self.ROI
 
-                print self.count
+                        self.cameraframe.process_queue(params,msg,self.count2)
+                        timelist.append(timenow)
+                        #print timelist
+                        outers.append(OD)
+                        inners.append(ID)
+                        self.graphframe.plot(timelist,outers,inners,self.toolbar.xlims, self.toolbar.ylims, self.toolbar.xlims2, self.toolbar.ylims2)    
+                        self.count += 1
+
+                        # Get the arduino data
+                        temppres = self.Arduino.getData()
+                        P1,P2,T = self.sortdata(temppres)
+                        self.toolbar.update_temp(T) #### CHANGE to T
+                        self.toolbar.update_pressure(P1,P2, (P1+P2)/2)
+                        self.toolbar.update_diam(OD,ID)
+                        self.toolbar.update_time(timenow)
+
+                        savedata = timenow,OD,ID, T, P1, P2, (P1+P2)/2
+                        savedata2 = [timenow]+ODlist
+                        savedata3 = [timenow]+IDlist
+                        self.writeToFile(savedata)
+                        self.writeToFile2(savedata2)
+                        self.writeToFile3(savedata3)
+
+                        #Need to access the outer diameter from the toolbar
+                        self.OD = OD
+                        
+
+                    else:
+                        msg = self.queue.get(0)
+                        params = 0,0,0,0,0,0,0,0,0,0,0
+                        self.cameraframe.process_queue(params,msg,self.count2)  
+                    
+                    self.count2 += 1
+                    #print self.count
+                    return
+                except Queue.Empty:
+                    # just on general principles, although we don't expect this branch to be taken in this case
+                    pass
                 return
-            except Queue.Empty:
-                # just on general principles, although we don't expect this branch to be taken in this case
-                pass
-            return
+
+
 
 class setCamera(object):
     def __init__(self,camera_label):
         camera_label = camera_label
-        #print "working out the diameter"
+        self.DEVICE = None
+    
+    def set_exp(self,exposure):
+        mmc.setExposure(exposure)
+        return
+
 
     def set(self, camera_label):
-        mmc.reset()
-        if camera_label == "Thorlabs":
-            print "Camera Selected: ", camera_label
-            DEVICE = ["ThorCam","ThorlabsUSBCamera","ThorCam"] #camera properties - micromanager creates these in a file
-        elif camera_label == "FakeCamera":
-            print "Camera Selected: ", camera_label
-            DEVICE = ['Camera', 'FakeCamera', 'FakeCamera'] #camera properties - micromanager creates these in a file
-        elif camera_label == "":
-            tmb.showinfo("Warning", "You need to select a camera source!")
-            return
         # Set up the camera
+        mmc.reset()
         mmc.enableStderrLog(False)
         mmc.enableDebugLog(False)
         mmc.setCircularBufferMemoryFootprint(100)# (in case of memory problems)
-        mmc.loadDevice(*DEVICE)
-        mmc.initializeDevice(DEVICE[0])
-        mmc.setCameraDevice(DEVICE[0])
-        mmc.setExposure(500)
-        mmc.setProperty(DEVICE[0], 'PixelType', '8bit')
-        mmc.setProperty(DEVICE[0], 'Path mask', 'SampleData\\TEST?{4.0}?.tif') #C:\\00-Code\\00 - VasoTracker\\
-        # To load in a sequence 
-        DEVICE2 = ['Focus', 'DemoCamera', 'DStage']
-        mmc.loadDevice(*DEVICE2)
-        mmc.initializeDevice(DEVICE2[0])
-        mmc.setFocusDevice(DEVICE2[0])
-        #mmc.snapImage()
-        #img = mmc.getImage() 
-        #mmc.setProperty("DStage", "Position", 100);
-        mmc.setProperty(self.DEVICE2[0], "Position", 0)
 
+        if camera_label == "Thorlabs":
+            print "Camera Selected: ", camera_label
+            DEVICE = ["ThorCam","ThorlabsUSBCamera","ThorCam"] #camera properties - micromanager creates these in a file
+            mmc.loadDevice(*DEVICE)
+            mmc.initializeDevice(DEVICE[0])
+            mmc.setCameraDevice(DEVICE[0])
+            mmc.setProperty(DEVICE[0], 'Binning', 1)
+            mmc.setProperty(DEVICE[0], 'HardwareGain', 1)
+            mmc.setProperty(DEVICE[0], 'PixelClockMHz', 5)
+            mmc.setProperty(DEVICE[0], 'PixelType', '8bit')
+            mmc.setExposure(exposure)
+        elif camera_label == "FakeCamera":
+            print "Camera Selected: ", camera_label
+            DEVICE = ['Camera', 'FakeCamera', 'FakeCamera'] #camera properties - micromanager creates these in a file
+            mmc.loadDevice(*DEVICE)
+            mmc.initializeDevice(DEVICE[0])
+            mmc.setCameraDevice(DEVICE[0])
+            print "exposure is: ", 500
+            mmc.setExposure(500)
+            mmc.setProperty(DEVICE[0], 'PixelType', '8bit')
+            mmc.setProperty(DEVICE[0], 'Path mask', 'SampleData\\TEST?{4.0}?.tif') #C:\\00-Code\\00 - VasoTracker\\
+            # To load in a sequence 
+            DEVICE2 = ['Focus', 'DemoCamera', 'DStage']
+            mmc.loadDevice(*DEVICE2)
+            mmc.initializeDevice(DEVICE2[0])
+            mmc.setFocusDevice(DEVICE2[0])
+            mmc.setProperty(DEVICE2[0], "Position", 0)
+        elif camera_label == "":
+            tmb.showinfo("Warning", "You need to select a camera source!")
+            return
+        
+        # TODO SET BINNING PARAMETER
+        '''
+        try:
+            mmc.setProperty(DEVICE[0], "Binning", "2")
+        except:
+            pass
+        '''
 
 
 
@@ -339,26 +492,151 @@ class ToolBar(tk.Frame):
         self.parent = parent
         self.mainWidgets()
         self.set_camera = setCamera(self)
+        self.ref_OD = None
+
+
+
+    #Functions that do things in the toolbar
+    def update_temp(self, temp):
+        # Updates the temperature widget
+        self.temp_entry.config(state='normal')
+        self.temp_entry.delete(0, 'end')
+        self.temp_entry.insert(0, '%.2f' % temp)
+        self.temp_entry.config(state='DISABLED')
+
+    def update_pressure(self, P1,P2,PAvg):
+        # Update average pressure
+        self.pressureavg_entry.config(state='normal')
+        self.pressureavg_entry.delete(0, 'end')
+        self.pressureavg_entry.insert(0, '%.2f' % PAvg)
+        self.pressureavg_entry.config(state='DISABLED')
+
+    def update_diam(self, OD, ID):
+        # Update outer diameter
+        self.outdiam_entry.config(state='normal')
+        self.outdiam_entry.delete(0, 'end')
+        self.outdiam_entry.insert(0, '%.2f' % OD)
+        self.outdiam_entry.config(state='DISABLED')
+        # Update outer diameter
+        self.indiam_entry.config(state='normal')
+        self.indiam_entry.delete(0, 'end')
+        self.indiam_entry.insert(0, '%.2f' % ID)
+        self.indiam_entry.config(state='DISABLED')
+    
+    def update_time(self, time):
+        #Update the temperature widget
+        self.time_entry.config(state='normal')
+        self.time_entry.delete(0, 'end')
+        timestring = str(datetime.timedelta(seconds=time))[:-4]
+        self.time_entry.insert(0, timestring)
+        self.time_entry.config(state='DISABLED')
+        
+    # Function that changes the exposure on enter key
+    def update_exposure(self,event):
+        global prevcontents,exposure        
+        try:
+        # Check if the exposure is within a suitable range
+            exp = self.contents.get()
+            if exp < 10:
+                exp = 10
+            elif exp > 500:
+                exp = 500
+            self.exposure_entry.delete(0, 'end')
+            self.exposure_entry.insert('0', exp) 
+
+            print "Setting exposure to:", exp
+            self.parent.exposure = int(exp)
+            prevcontents = exp
+            exposure = exp
+        except: 
+            print "Exposure remaining at:", prevcontents
+            self.exposure_entry.delete(0, 'end')
+            self.exposure_entry.insert('0', prevcontents)
+            exposure = prevcontents
+        self.set_camera.set_exp(exposure)
+
+    def update_rec_interval(self,event):
+        global rec_interval, rec_prevcontents
+        try: # Should check contents for int rather than try and catch exception
+            rec = self.rec_contents.get()
+            self.rec_interval_entry.delete(0, 'end')
+            self.rec_interval_entry.insert('0', rec) 
+            self.parent.rec_interval = int(rec)
+            rec_prevcontents = rec
+            rec_interval = rec
+        except: 
+            print "Record interval remaining at:", rec_prevcontents
+            self.rec_interval_entry.delete(0, 'end')
+            self.rec_interval_entry.insert('0', rec_prevcontents)
+            rec_interval = rec_prevcontents
+
+    def update_num_lines(self,event):
+        global num_lines, num_lines_prevcontents
+        try: # Should check contents for int rather than try and catch exception
+            num_lines = self.num_lines_contents.get()
+            if num_lines < 5:
+                num_lines = 5
+            elif num_lines > 50:
+                num_lines = 50
+            self.num_lines_entry.delete(0, 'end')
+            self.num_lines_entry.insert('0', num_lines) 
+            self.parent.num_lines = int(num_lines)
+            print "Setting number of lines to: ", self.parent.num_lines
+            num_lines_prevcontents = num_lines
+            num_lines = num_lines
+            
+        except: 
+            print "Number of lines remaining at:", num_lines_prevcontents
+            self.num_lines_entry.delete(0, 'end')
+            self.num_lines_entry.insert('0', num_lines_prevcontents)
+            num_lines = num_lines_prevcontents
+
+        # TO DO MAKE SURE THIS WORKS
+        # Function that changes the exposure on enter key
+    def update_scale(self,event):
+        global scale_prevcontents, multiplication_factor
+        print "updating the scale..."
+        try:
+        # Check if the exposure is within a suitable range
+            scale = self.scale_contents.get()
+            print "the scale is:", scale
+            self.scale_entry.delete(0, 'end')
+            self.scale_entry.insert('0', scale) 
+            print "Setting scale to:", scale
+            self.parent.multiplication_factor = scale
+            scale_prevcontents = scale
+            multiplication_factor = scale
+        except:
+            print "Scale remaining at:", scale_prevcontents
+            self.scale_entry.delete(0, 'end')
+            self.scale_entry.insert('0', scale_prevcontents)
+            multiplication_factor = scale_prevcontents
+
 
     def mainWidgets(self):
         self.toolbarview = ttk.Frame(root, relief=RIDGE)
-        #self.toolbarview.pack(side=LEFT,  fill=BOTH, expand=1)
-        self.toolbarview.grid(row=2,column=2,rowspan=2,sticky=N+S+E+W, pady=ypadding)
+        self.toolbarview.grid(row=2,column=3,rowspan=2,sticky=N+S+E+W, pady=0)
 
    # Tool bar groups
-        source_group = ttk.LabelFrame(self, text='Source', height=150, width=200)
+        source_group = ttk.LabelFrame(self, text='Source', height=150, width=150)
         source_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
 
-        outer_diameter_group = ttk.LabelFrame(self, text='Outer Diameter', height=150, width=200)
+        settings_group = ttk.LabelFrame(self, text='Acquisition Settings', height=150, width=150)
+        settings_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
+
+        ana_settings_group = ttk.LabelFrame(self, text='Analysis Settings', height=150, width=150)
+        ana_settings_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
+
+        outer_diameter_group = ttk.LabelFrame(self, text='Outer Diameter', height=150, width=150)
         outer_diameter_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
 
-        inner_diameter_group = ttk.LabelFrame(self, text='Inner Diameter', height=150, width=200)
+        inner_diameter_group = ttk.LabelFrame(self, text='Inner Diameter', height=150, width=150)
         inner_diameter_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
 
-        acquisition_group = ttk.LabelFrame(self, text='Data acquisition', height=150, width=200)
+        acquisition_group = ttk.LabelFrame(self, text='Data acquisition', height=150, width=150)
         acquisition_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
 
-        start_group = ttk.LabelFrame(self, text='Start/Stop', height=150, width=200)
+        start_group = ttk.LabelFrame(self, text='Start/Stop', height=150, width=150)
         start_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
 
     # Source group (e.g. camera and files)
@@ -371,7 +649,6 @@ class ToolBar(tk.Frame):
         save_label = ttk.Label(source_group, text = 'File:')
         save_label.grid(row=2, column=0, sticky=E)
 
-    
         # Flag Start/stop group
         self.start_flag = False
         def set_cam(self):
@@ -387,14 +664,9 @@ class ToolBar(tk.Frame):
         variable = StringVar()
         variable.set(self.camoptions[0])
         self.camera_entry = ttk.OptionMenu(source_group, variable,self.camoptions[0], *self.camoptions, command= lambda _: set_cam(self))
-
-        #camera_entry = ttk.Entry(source_group, width=20)
-        #camera_entry.insert('0', DEVICE[1])
-        #camera_entry.config(state=DISABLED)
         self.camera_entry.grid(row=0, column=1, pady=5)
 
-        global head
-        global tail
+        global head, tail
         head,tail = os.path.split(self.parent.filename.name)
 
         path_entry = ttk.Entry(source_group, width=20)
@@ -407,15 +679,122 @@ class ToolBar(tk.Frame):
         save_entry.config(state=DISABLED)
         save_entry.grid(row=2, column=1, pady=5)
 
-        scale_label = ttk.Label(source_group, text = 'um/pixel:')
-        scale_label.grid(row=3, column=0, sticky=E)
-        scale_entry = ttk.Entry(source_group, width=20)
-        scale = self.parent.multiplication_factor
-        scalefloat = "%4.2f" % scale
-        scale_entry.insert('0', scalefloat)
-        scale_entry.config(state=DISABLED)
-        scale_entry.grid(row=3, column=1, pady=5)
 
+    # Settings group (e.g. camera and files)
+        scale_label = ttk.Label(settings_group, text = 'um/pixel:')
+        scale_label.grid(row=0, column=0, sticky=E)
+
+        exposure_label = ttk.Label(settings_group, text = 'Exp (s):')
+        exposure_label.grid(row=1, column=0, sticky=E)
+
+        acqrate_label = ttk.Label(settings_group, text = 'Acq rate (Hz):')
+        acqrate_label.grid(row=2, column=0, sticky=E)
+
+        rec_interval_label = ttk.Label(settings_group, text = 'Rec intvl (frames):')
+        rec_interval_label.grid(row=3, column=0, sticky=E)
+
+        # Scale settings
+        scale = self.parent.multiplication_factor
+        scalefloat = "%3.0f" % scale
+        self.scale_contents = DoubleVar()
+        self.scale_contents.set(scalefloat)
+        global scale_contents
+        scale_prevcontents = self.scale_contents.get()
+        self.scale_entry = ttk.Entry(settings_group, textvariable = self.scale_contents,width=20)
+        self.scale_entry.grid(row=0, column=1, pady=5)
+        self.scale_entry.bind('<Return>', self.update_scale)
+
+        # Exposure settings
+        exp = self.parent.exposure
+        expfloat = "%3.0f" % exp
+        self.contents = IntVar()
+        self.contents.set(int(exp))
+        global prevcontents
+        prevcontents = self.contents.get()
+        self.exposure_entry = ttk.Entry(settings_group, textvariable = self.contents,width=20)
+        self.exposure_entry.grid(row=1, column=1, pady=5)
+        self.exposure_entry.bind('<Return>', self.update_exposure)
+                
+        # Acquisition rate settings
+        acq_rate = self.parent.acq_rate
+        acq_rate = "%3.0f" % acq_rate
+        self.acq_rate_contents = IntVar()
+        self.acq_rate_contents.set(int(acq_rate))
+        global acq_rate_prevcontents
+        acq_rate_prevcontents = self.acq_rate_contents.get()
+        self.acq_rate__entry = ttk.Entry(settings_group, textvariable = self.acq_rate_contents,width=20)
+        self.acq_rate__entry.grid(row=2, column=1, pady=5)
+        self.acq_rate__entry.configure(state="disabled")
+        #self.acq_rate_entry.bind('<Return>', self.acq_rate_exposure)
+
+        # Record interval settings
+        rec_interval = self.parent.rec_interval
+        self.rec_contents = IntVar()
+        self.rec_contents.set(int(rec_interval))
+        global rec_prevcontents
+        rec_prevcontents = self.rec_contents.get()
+        self.rec_interval_entry = ttk.Entry(settings_group, textvariable = self.rec_contents,width=20)
+        self.rec_interval_entry.grid(row=3, column=1, pady=5)
+        self.rec_interval_entry.bind('<Return>', self.update_rec_interval)
+
+
+    # Analysis Settings group (e.g. camera and files)
+        numlines_label = ttk.Label(ana_settings_group, text = '# of lines:')
+        numlines_label.grid(row=0, column=0, sticky=E)
+
+        ROI_label = ttk.Label(ana_settings_group, text = 'ROI:')
+        ROI_label.grid(row=1, column=0, sticky=E)
+
+        ref_diam_label = ttk.Label(ana_settings_group, text = 'Ref diameter:')
+        ref_diam_label.grid(row=2, column=0, sticky=E)
+
+        # Num lines settings
+        num_lines = self.parent.num_lines
+        self.num_lines_contents = IntVar()
+        self.num_lines_contents.set(int(num_lines))
+        global num_lines_prevcontents
+        num_lines_prevcontents = self.num_lines_contents.get()
+        self.num_lines_entry = ttk.Entry(ana_settings_group, textvariable = self.num_lines_contents,width=20)
+        self.num_lines_entry.grid(row=0, column=1, pady=0)
+        self.num_lines_entry.bind('<Return>', self.update_num_lines)
+
+
+
+
+        # ROI Settings
+        self.set_roi = False
+        def ROIset_button_function(get_coords):
+            self.set_roi = True
+            print "Set ROI = ", self.set_roi
+            self.ROI_checkBox.configure(state="enabled")
+            stop_acq()
+            return self.set_roi
+        
+        ROI_set_button = ttk.Button(ana_settings_group, text='Set ROI', command= lambda: ROIset_button_function(get_coords=True))
+        ROI_set_button.grid(row=1,column=1, columnspan=1, pady=0)
+
+        # ROI Settings
+        def refdiam_set_button_function(get_coords):
+            #### TODO SORT THIS
+            self.ref_OD = self.parent.OD
+            print "set ref button pressed = , ", self.ref_OD
+            return self.ref_OD
+
+
+        refdiam_set_button = ttk.Button(ana_settings_group, text='Set ref', command= lambda: refdiam_set_button_function(get_coords=True))
+        refdiam_set_button.grid(row=2,column=1, columnspan=1, pady=0)
+
+        self.filter_is_checked = IntVar()
+
+        filter_checkBox = ttk.Checkbutton(ana_settings_group, text='Filter readings', onvalue=1, offvalue=0, variable=self.filter_is_checked)
+        filter_checkBox.grid(row=3, columnspan=2, padx=5, pady=3, sticky=W)
+
+        self.ROI_is_checked = IntVar()
+
+        self.ROI_checkBox = ttk.Checkbutton(ana_settings_group, text='Use ROI', onvalue=1, offvalue=0, variable=self.ROI_is_checked)
+        self.ROI_checkBox.grid(row=4, columnspan=2, padx=5, pady=3, sticky=W)
+        self.ROI_checkBox.configure(state="disabled")
+        
 
     # Outer diameter group
     # Function for the labels
@@ -456,7 +835,6 @@ class ToolBar(tk.Frame):
                 else:
                     self.xlims = (self.x_min_label.get(),self.x_max_label.get())
                     self.ylims = (self.y_min_label.get(),self.y_max_label.get())
-                print "XLIMS_TRUE_SET = ", self.xlims
                 return self.xlims, self.ylims
                 get_coords = False
             else:
@@ -517,7 +895,6 @@ class ToolBar(tk.Frame):
                 else:
                     self.xlims2 = (self.x_min_label2.get(),self.x_max_label2.get())
                     self.ylims2 = (self.y_min_label2.get(),self.y_max_label2.get())
-                print "Inner XLIMS_TRUE_SET = ", self.xlims2
                 return self.xlims2, self.ylims2
                 get_coords = False
             else:
@@ -559,20 +936,45 @@ class ToolBar(tk.Frame):
         temp_label = ttk.Label(acquisition_group, text = 'Temp (oC):')
         temp_label.grid(row=0, column=0, sticky=E)
 
-        pressure_label = ttk.Label(acquisition_group, text = 'Pressure (mmHg):')
-        pressure_label.grid(row=1, column=0, sticky=E)
+        pressureavg_label = ttk.Label(acquisition_group, text = 'Avg Pressure (mmHg):')
+        pressureavg_label.grid(row=1, column=0, sticky=E)
 
-        temp_entry = ttk.Entry(acquisition_group, width=20)
-        temp_entry.insert(0, "37")
-        temp_entry.config(state=DISABLED)
-        temp_entry.grid(row=0, column=1, pady=5)
+        outdiam_label = ttk.Label(acquisition_group, text = 'Outer diameter (um):')
+        outdiam_label.grid(row=2, column=0, sticky=E)
 
-        pressure_entry = ttk.Entry(acquisition_group, width=20)
-        pressure_entry.insert(0, "60")
-        pressure_entry.config(state=DISABLED)
-        pressure_entry.grid(row=1, column=1, pady=5)
-    
-    
+        indiam_label = ttk.Label(acquisition_group, text = 'Inner diameter (um):')
+        indiam_label.grid(row=3, column=0, sticky=E)
+
+        time_label = ttk.Label(acquisition_group, text = 'Time (hr:min:sec:msec):')
+        time_label.grid(row=4, column=0, sticky=E)
+
+        self.temp_entry = ttk.Entry(acquisition_group, width=10)
+        self.temp_entry.insert(0, "N/A")
+        self.temp_entry.config(state=DISABLED)
+        self.temp_entry.grid(row=0, column=1, pady=0)
+
+        self.pressureavg_entry = ttk.Entry(acquisition_group, width=10)
+        self.pressureavg_entry.insert(0, "N/A")
+        self.pressureavg_entry.config(state=DISABLED)
+        self.pressureavg_entry.grid(row=1, column=1, pady=0)
+
+        self.outdiam_entry = ttk.Entry(acquisition_group, width=10)
+        self.outdiam_entry.insert(0, "N/A")
+        self.outdiam_entry.config(state=DISABLED)
+        self.outdiam_entry.grid(row=2, column=1, pady=0)
+
+        self.indiam_entry = ttk.Entry(acquisition_group, width=10)
+        self.indiam_entry.insert(0, "N/A")
+        self.indiam_entry.config(state=DISABLED)
+        self.indiam_entry.grid(row=3, column=1, pady=0)
+
+        self.time_entry = ttk.Entry(acquisition_group, width=10)
+        self.time_entry.insert(0, "N/A")
+        self.time_entry.config(state=DISABLED)
+        self.time_entry.grid(row=4, column=1, pady=0)
+
+
+
 
     # Function that will start the image acquisition
         def start_acq():
@@ -581,43 +983,69 @@ class ToolBar(tk.Frame):
                 self.start_flag = False
             else:
                 self.camera_entry.configure(state="disabled")
-                print self.start_flag
+                self.exposure_entry.configure(state="disabled")
+                self.scale_entry.configure(state="disabled")
+                self.rec_interval_entry.configure(state="disabled")
+                self.num_lines_entry.configure(state="disabled")
                 self.start_flag = True
-                print self.start_flag
-                mmc.startContinuousSequenceAcquisition(1000)
+                self.record_video_checkBox.configure(state="disabled")
+                mmc.startContinuousSequenceAcquisition(0)
             return self.start_flag
     # Function that will stop the image acquisition
         def stop_acq():
             self.camera_entry.configure(state="enabled")
-            print self.start_flag
+            self.exposure_entry.configure(state="enabled")
+            self.scale_entry.configure(state="enabled")
+            self.rec_interval_entry.configure(state="enabled")
+            self.num_lines_entry.configure(state="enabled")
             self.start_flag = False
-            print self.start_flag
+            self.record_video_checkBox.configure(state="enabled")
             mmc.stopSequenceAcquisition()
-            return self.start_flag
+            self.record_flag = False
+            return self.start_flag,self.record_flag
 
     # Function that will start the data acquisition
         self.record_flag = False
         def record_data():
-            self.record_flag = True
+            if self.start_flag == True:
+                self.record_flag = True
+                mmc.clearCircularBuffer()
             print "Just set the record flag to: ", self.record_flag
             return self.record_flag
-
+        '''
+        def stop_record_data():
+            self.record_flag = False
+            print "Just set the record flag to: ", self.record_flag
+            return self.record_flag
+        '''
+        def snapshot():
+            self.snapshot_flag = True
+            return self.snapshot_flag
 
 
         start_button = ttk.Button(start_group, text='Start', command= lambda: start_acq())
-        start_button.grid(row=0, column=0, pady=5, sticky=N+S+E+W) 
+        start_button.grid(row=0, column=0, pady=0, sticky=N+S+E+W) 
         #console = tk.Button(master, text='Exit', command=self.close_app)
         #console.pack(  )
         live_button = ttk.Button(start_group, text='Stop', command= lambda: stop_acq())
-        live_button.grid(row=1, column=0, pady=5, sticky=N+S+E+W) 
+        live_button.grid(row=1, column=0, pady=0, sticky=N+S+E+W) 
 
-        record_button = ttk.Button(start_group, text='Record', command= lambda: record_data())
-        record_button.grid(row=3, column=0, pady=5, sticky=N+S+E+W) 
+        record_button = ttk.Button(start_group, text='Track', command= lambda: record_data())
+        record_button.grid(row=3, column=0, pady=0, sticky=N+S+E+W) 
+        
+        self.snapshot_flag = False
+        snapshot_button = ttk.Button(start_group, text='Snapshot', command= lambda: snapshot())
+        snapshot_button.grid(row=4, column=0, pady=0, sticky=N+S+E+W) 
+
+        #stop_record_button = ttk.Button(start_group, text='Stop tracking', command= lambda: stop_record_data())
+        #stop_record_button.grid(row=4, column=0, pady=5, sticky=N+S+E+W) 
 
         self.record_is_checked = IntVar()
 
-        record_video_checkBox = ttk.Checkbutton(start_group, text='Record Video', onvalue=1, offvalue=0, variable=self.record_is_checked)
-        record_video_checkBox.grid(row=4, columnspan=2, padx=5, pady=3, sticky=W)
+        self.record_video_label = ttk.Label(settings_group, text = 'Record video?')
+        self.record_video_label.grid(row=4, column=0, sticky=E)
+        self.record_video_checkBox = ttk.Checkbutton(settings_group, onvalue=1, offvalue=0, variable=self.record_is_checked)
+        self.record_video_checkBox.grid(row=4, column=1, columnspan=1, padx=5, pady=3, sticky=W)
 
 
 
@@ -626,11 +1054,11 @@ class GraphFrame(tk.Frame):
     min_x = 0
     max_x = 10
     def __init__(self,parent):
-        tk.Frame.__init__(self, parent, highlightthickness=2, highlightbackground="#111")
+        tk.Frame.__init__(self, parent)#, highlightthickness=2, highlightbackground="#111")
         self.parent = parent
         self.top = Frame()
         self.top.update_idletasks()
-        self.n_points = 100000
+        self.n_points = 1000
         self.xlim1 = self.parent.toolbar.x_min_default # Outer
         self.xlim2 = self.parent.toolbar.x_max_default # Outer
         self.ylim1 = self.parent.toolbar.y_min_default # Outer
@@ -701,6 +1129,7 @@ class GraphFrame(tk.Frame):
     
     # Get the xdata points that fit within the axis limits
         xdata3 = [el for el in xdata if el > xlims[0]]
+        xdata4 = [el for el in xdata if el > xlims2[0]]
     
     # Get the corresponding ydata points
         ydata1A = ydata1[::-1]
@@ -708,7 +1137,7 @@ class GraphFrame(tk.Frame):
         ydata1C = ydata1B[::-1]
 
         ydata2A = ydata2[::-1]
-        ydata2B = ydata2A[0:len(xdata3)]
+        ydata2B = ydata2A[0:len(xdata4)]
         ydata2C = ydata2B[::-1]
 
         #ydata1 = [el2 for (el1,el2) in zip(xdata,ydata1) if el1 > self.xlim1-5] # For some reason this did not work
@@ -722,6 +1151,7 @@ class GraphFrame(tk.Frame):
         #   every time the number of data points has doubled.
         
         self.i = int(len(xdata3))
+        self.i2 = int(len(xdata4))
         '''
         if self.i == self.n_points :
             self.n_points *= 2
@@ -745,7 +1175,7 @@ class GraphFrame(tk.Frame):
                                                 color="blue", linewidth = 3)
 
                 self.graphview.line2, = self.graphview.ax2.plot(
-                                            xdata3[::-1][0::int(self.delta_i)][::-1],
+                                            xdata4[::-1][0::int(self.delta_i)][::-1],
                                                 ydata2C[::-1][0::int(self.delta_i)][::-1],
                                                 color="red", linewidth = 3)
 
@@ -811,18 +1241,24 @@ class TimeIt():
     def __enter__(self):
         self.tic = self.datetime.now()
     def __exit__(self, *args, **kwargs):
-        print('runtime: {}'.format(self.datetime.now() - self.tic))
+        print('plot graph runtime: {}'.format(self.datetime.now() - self.tic))
 
+class TimeIt2():
+    from datetime import datetime
+    def __enter__(self):
+        self.tic = self.datetime.now()
+    def __exit__(self, *args, **kwargs):
+        print('process queue runtime: {}'.format(self.datetime.now() - self.tic))
 
 class TableFrame(tk.Frame):
     def __init__(self,parent):
-        tk.Frame.__init__(self, parent, width=250, height = 300)#, highlightthickness=2, highlightbackground="#111")
+        tk.Frame.__init__(self, parent)#,highlightthickness=2,highlightbackground="#111")#, width=250, height = 300)#, highlightthickness=2, highlightbackground="#111")
         self.parent = parent
         self.mainWidgets()
               
     def mainWidgets(self):
         self.tableview = ttk.Frame(self)
-        self.tableview.grid(row=0, column=0, sticky=N+S+E+W)
+        self.tableview.grid(row=1, column=3, sticky=N+S+E+W)
 
         try:
             OutDiam = float(self.parent.processIncoming.OD)
@@ -830,41 +1266,41 @@ class TableFrame(tk.Frame):
         except:
             pass
         
-        P1 = '60'
-        P2 = '60'
+
 
         def add_row():
-                try:
-                    OutDiam = float(OD)
-                    InDiam = float(ID)
-                    initOutDiam, initInDiam = float(initOD), float(initID)
-                    Label = table_text_entry.get()
-                    Time = (time.time() - start_time)
-                    Time = float(Time)
-                    Time = round(Time, 1)
-                    mxDiastring = StringVar()
-                    max_diameter_text.set(str(initOutDiam))
-                    max_diameter = initOutDiam
-                    #max_diameter = max_diameter_text.set()
-                    #max_diameter = int(max_diameter)
-                    if max_diameter > 0:
-                        max_diameter = float(max_diameter)
-                        max_percent = ((float(OutDiam/max_diameter))*100)
-                        max_percent = round(max_percent, 1)
-                        table_1.insert('', 'end', values=(Time, Label, OutDiam, P1, P2, max_percent))
-                    else:
-                        max_percent = '-'
-                        table_1.insert('', 'end', values=(Time, Label, OutDiam, P1, P2, max_percent))
-                        hello = Label
-                        save_table(hello)
-                    table_1.yview_moveto(1)
-
-                except ValueError:
+            try:
+                OutDiam = float(OD)
+                InDiam = float(ID)
+                initOutDiam, initInDiam = float(initOD), float(initID)
+                Label = table_text_entry.get()
+                Time = (time.time() - start_time)
+                Time = float(Time)
+                Time = round(Time, 1)
+                mxDiastring = StringVar()
+                max_diameter_text.set(str(self.parent.toolbar.ref_OD))
+                max_diameter = self.parent.toolbar.ref_OD
+                #max_diameter = max_diameter_text.set()
+                #max_diameter = int(max_diameter)
+                if max_diameter > 0:
+                    max_diameter = float(max_diameter)
+                    max_percent = ((float(OutDiam/max_diameter))*100)
+                    max_percent = round(max_percent, 1)
+                    table_1.insert('', 'end', values=(Time, Label, OutDiam, 60,60, max_percent)) #P1, P2
+                    hello = ((Time, Label, OutDiam, P1, P2, max_percent))
+                
+                else:
                     max_percent = '-'
-                    table_1.insert('', 'end', values=(Time, Label, OutDiam, P1, P2, max_percent))
-                    hello = ((Time, Label, OutDiam, P1, P2))
-                    print hello
-                    save_table(hello)
+                    table_1.insert('', 'end', values=(Time, Label, OutDiam, 60,60, max_percent)) #P1, P2
+                    hello = ((Time, Label, OutDiam, P1, P2, max_percent))
+                
+                table_1.yview_moveto(1)
+
+            except ValueError:
+                max_percent = '-'
+                table_1.insert('', 'end', values=(Time, Label, OutDiam, P1, P2, max_percent))
+                hello = ((Time, Label, OutDiam, P1, P2))
+            save_table(hello)
 
         table_text_entry = StringVar()
         max_diameter_text = StringVar()
@@ -889,7 +1325,7 @@ class TableFrame(tk.Frame):
         table_entry.grid(row=0, column=1)        
         add_button = ttk.Button(table_2, text='Add', command=add_row)
         add_button.grid(row=0, column=2)
-        max_diameter_label = ttk.Label(table_2, text='Initial Diameter:')
+        max_diameter_label = ttk.Label(table_2, text='Reference Diameter:')
         max_diameter_label.grid(row=0, column=3)
         max_diameter_entry = ttk.Entry(table_2, width=5, textvariable=max_diameter_text )
         max_diameter_entry.grid(row=0, column=4)
@@ -897,22 +1333,22 @@ class TableFrame(tk.Frame):
        
         
         table_1 = ttk.Treeview(self.tableview, show= 'headings')
-        table_1["columns"] = ('Time', 'Label', 'Diameter', 'Pressure 1', 'Pressure 2', '% Initial')
+        table_1["columns"] = ('Time', 'Label', 'Outer Diameter', 'Pressure 1', 'Pressure 2', '% Ref')
 
         table_1.column('#0', width=30)
         table_1.column('Time', width=100, stretch=True)
         table_1.column('Label', width=150)
-        table_1.column('Diameter', width=100)
+        table_1.column('Outer Diameter', width=100)
         table_1.column('Pressure 1', width=100)
         table_1.column('Pressure 2', width=100)
-        table_1.column('% Initial', width=50)
+        table_1.column('% Ref', width=50)
 
         table_1.heading('#1', text = 'Time')
         table_1.heading('#2', text = 'Label')
-        table_1.heading('#3', text = 'Diameter')
+        table_1.heading('#3', text = 'Outer Diameter')
         table_1.heading('#4', text = 'Pressure 1')
         table_1.heading('#5', text = 'Pressure 2')
-        table_1.heading('#6', text = '% Initial')
+        table_1.heading('#6', text = '% Ref')
 
 
         scrollbar = Scrollbar(self.tableview)
@@ -924,77 +1360,335 @@ class TableFrame(tk.Frame):
 
 class CameraFrame(tk.Frame):
     def __init__(self,parent):
-        tk.Frame.__init__(self, parent, width=250, height = 300)#, highlightthickness=2, highlightbackground="#111")
+        tk.Frame.__init__(self, parent)#, width=1000, height = 600)#, highlightthickness=2, highlightbackground="#111")
         self.parent = parent
         self.mainWidgets()
               
     def mainWidgets(self):
-        self.cameraview = tk.Label(self)
+        # Get the max dimensions that the Canvas can be
+        self.maxheight = self.parent.graphframe.winfo_height() - self.parent.tableframe.winfo_height()
+        self.maxwidth = self.parent.status_bar.winfo_width() -  self.parent.graphframe.winfo_width()
+        # Set up the Canvas that we will show the image on
+        self.cameraview = tk.Canvas(self, width=self.maxwidth, height=self.maxheight, background='white')
         self.cameraview.grid(row=2,column=2,sticky=N+S+E+W, pady=ypadding)
+
+        # ROI rectangle initialisation
+        self.rect = None
+        self.start_x = None
+        self.start_y = None
+        self.end_x = None
+        self.end_y = None
+        # Factors for scaling ROI to original image (which is scaled to fit canvas)
+        self.delta_width = None
+        self.delta_height = None
+        self.scale_factor = None
+
+        # Bind events to mouse
+        self.cameraview.bind("<ButtonPress-1>",self.on_button_press)
+        self.cameraview.bind("<B1-Motion>",self.on_move_press)
+        self.cameraview.bind("<ButtonRelease-1>",self.on_button_release)
+
+
+    # Define functions for mouse actions
+    def on_button_press(self, event):
+        if self.parent.toolbar.set_roi == True: # Only enable if we have just pressed the button
+            # Delete any old ROIs
+            found = event.widget.find_all()
+            for iid in found:
+                if event.widget.type(iid) == 'rectangle':
+                    event.widget.delete(iid)
+            # Create the rectangle ROI
+            self.start_x = event.x
+            self.start_y = event.y
+            self.rect = self.cameraview.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y)
+
+    def on_move_press(self, event):
+        #Update the ROI when the mouse is dragged
+        if self.parent.toolbar.set_roi == True:
+            curX, curY = (event.x, event.y)
+            self.cameraview.coords(self.rect, self.start_x, self.start_y, curX, curY)
+
+
+    def on_button_release(self, event):
+        if self.parent.toolbar.set_roi == True: # Only enable if we have just pressed the button
+            self.end_x =  event.x
+            self.end_y =  event.y
+            self.parent.toolbar.set_roi = False
+            self.parent.toolbar.ROI_checkBox.state(['selected'])
+            self.parent.toolbar.ROI_is_checked.set(1)
+            pass  
+
+    def rescale_frame(self,frame):
+        # Scaling a rectangle to fit inside another rectangle.
+        # works out destinationwidth/sourcewidth and destinationheight/sourceheight
+        # and scaled by the smaller of the two ratios
+        width = frame.shape[1]
+        height = frame.shape[0]
+
+        #print "INFO"
+        #print width, height
+        #print self.maxwidth, self.maxheight
+
+        widthfactor = self.maxwidth / width
+        heightfactor = self.maxheight / height
+
+        if widthfactor < heightfactor:
+            self.scale_factor = widthfactor
+        else:
+            self.scale_factor = heightfactor
+
+        global scale_factor
+        scale_factor = self.scale_factor
+
+        #print scale_factor
+
+        width = int(frame.shape[1] * self.scale_factor)
+        height = int(frame.shape[0] * self.scale_factor)
+
+        #print "NEWDIMS"
+        #print  width, height
+
+        self.delta_width = int((self.maxwidth - width)/2)
+        self.delta_height = int((self.maxheight - height)/2)
+
+        global delta_height
+        delta_height = self.delta_height
+
+        return cv2.resize(frame, (width, height), interpolation = cv2.INTER_AREA)
      
-    def process_queue(self,params,img):
+    def process_queue(self,params,img,count):
+
         try:
-            
             img = img
             imgc = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            timenow,OD1,OD2,ID1,ID2,OuterD,start = params
+
+            '''
+            # TODO FIGURE OUT CODECS FOR AVI FILE
+            if count == 0:
+                # Add file for avi output
+                global out
+                aviPath = os.path.join(head, '%s.avi' % os.path.splitext(tail)[0])
+                out = cv2.VideoWriter(aviPath,-1, 10,(int(imgc.shape[1]),int(imgc.shape[0])))
+            '''
+            
+            timenow,OD1,OD2,ID1,ID2,OuterD,start,diff,ODS_flag,IDS_flag, ROI = params
+
             if self.parent.toolbar.record_flag:
+                
                 # Draw the diameters:
                 for m,OD in enumerate(OD1):
-                    pos = m*start+start
+                    if self.parent.toolbar.filter_is_checked.get() == 0:
+                        C1 = (255,0,0) # blue
+                        C2 = (0,0,255) #red
+                    else:
+                        if ODS_flag[m] == 1:
+                            C1 = (255,0,0) # blue
+                        else:
+                            C1 = (0,0,0) #black
+                        if IDS_flag[m] == 1:
+                            C2 = (0,0,255) #red
+                        else:
+                            C2 = (0,0,0) #black
+
+                    pos = m*diff+start
                     #Horizontal lines
-                    imgc = cv2.line(imgc,(OD1[m],pos),(OD2[m],pos),(255,0,0),4) #in opencv rgb is bgr
-                    imgc = cv2.line(imgc,(ID2[m],pos),(ID1[m],pos),(0,0,255),2) #in opencv rgb is bgr
+                    imgc = cv2.line(imgc,(OD1[m],pos),(OD2[m],pos),C1,4) #in opencv rgb is bgr
+                    imgc = cv2.line(imgc,(ID2[m],pos),(ID1[m],pos),C2,2) #in opencv rgb is bgr
                     #Vertical lines
-                    imgc = cv2.line(imgc,(OD2[m],pos-5),(OD2[m],pos+5),(255,0,0),4) #in opencv rgb is bgr
-                    imgc = cv2.line(imgc,(OD1[m],pos-5),(OD1[m],pos+5),(255,0,0),4) #in opencv rgb is bgr
-                    imgc = cv2.line(imgc,(ID2[m],pos-5),(ID2[m],pos+5),(0,0,255),2) #in opencv rgb is bgr
-                    imgc = cv2.line(imgc,(ID1[m],pos-5),(ID1[m],pos+5),(0,0,255),2) #in opencv rgb is bgr
+                    imgc = cv2.line(imgc,(OD2[m],pos-5),(OD2[m],pos+5),C1,4) #in opencv rgb is bgr
+                    imgc = cv2.line(imgc,(OD1[m],pos-5),(OD1[m],pos+5),C1,4) #in opencv rgb is bgr
+                    imgc = cv2.line(imgc,(ID2[m],pos-5),(ID2[m],pos+5),C2,2) #in opencv rgb is bgr
+                    imgc = cv2.line(imgc,(ID1[m],pos-5),(ID1[m],pos+5),C2,2) #in opencv rgb is bgr
 
-                cv2.putText(imgc, 't=%.2f seconds' %timenow,(20,30), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(255,255,255),1,cv2.LINE_AA)
-                if self.parent.toolbar.record_is_checked.get() == 1 and self.parent.count%60 == 0:
+                # Adding ROI to the image.
+                # There is a problem here.
+                # The RECTANGLE function uses coordinates from a box drawn on a scaled image
+                # We then plot these directly onto the original image, and then scale it again
+                # I need to transform the rectangle coordinates and subtract these off.
+                heightdiff = self.maxheight - imgc.shape[0]
+                widthdiff = self.maxwidth - imgc.shape[1]
+
+                # This is drawing on the region of interest
+                Cwhite = (0,0,0)
+                # First one is horizontal line
+                if self.rect and self.parent.toolbar.ROI_is_checked.get() == 1:
+                    rx0 = int((ROI[0][0]  - self.delta_width)/self.scale_factor)#
+                    rx1 = int((ROI[1][0]  - self.delta_width)/self.scale_factor)#
+                    ry0 = int((ROI[0][1]  - self.delta_height)/self.scale_factor) #
+                    ry1 = int((ROI[1][1]  - self.delta_height)/self.scale_factor)#
+
+
+                    #print "height = ", imgc.shape[0]
+                    #print "maxheight  = ", self.maxheight
+                    #print "width = ", imgc.shape[1]
+                    #print "maxwidth  = ", self.maxwidth
+                    #print self.delta_width, self.delta_height
+                    #print "scale factor = ", self.scale_factor
+                else:
+                    #print "Using this ROI"
+                    rx0 = ROI[0][0]#int((ROI[0][0]  - self.delta_width)/self.scale_factor)
+                    rx1 = ROI[1][0]#int((ROI[1][0]  - self.delta_width)/self.scale_factor)
+                    ry0 = ROI[0][1]#int((ROI[0][1]  - self.delta_height)/self.scale_factor)
+                    ry1 = ROI[1][1]#int((ROI[1][1]  - self.delta_height)/self.scale_factor)
+
+
+                imgc = cv2.line(imgc,(rx0,ry0),(rx1,ry0),Cwhite,1) #in opencv rgb is bgr
+                imgc = cv2.line(imgc,(rx0,ry1),(rx1,ry1),Cwhite,1) #in opencv rgb is bgr
+                imgc = cv2.line(imgc,(rx0,ry0),(rx0,ry1),Cwhite,1) #in opencv rgb is bgr
+                imgc = cv2.line(imgc,(rx1,ry0),(rx1,ry1),Cwhite,1) #in opencv rgb is bgr
+                
+                     
+
+                #cv2.putText(imgc, 't=%.2f s' %timenow,(30,30), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
+                if self.parent.toolbar.record_is_checked.get() == 1:# and self.parent.count%self.parent.rec_interval == 0:
                         timenow2 = int(timenow)
-                        gfxPath = os.path.join(head, '%s_t=%ss_Result.tiff' % (os.path.splitext(tail)[0],timenow2)) 
+                        directory = os.path.join(head, 'Tiff\\')
+                        if not os.path.exists(directory):
+                            os.makedirs(directory)
+                        gfxPath = os.path.join(directory, '%s_f=%s_Result.tiff' % (os.path.splitext(tail)[0],str(self.parent.count).zfill(6))) 
                         cv2.imwrite(gfxPath,imgc)
+                        #out.write(imgc) # For writing to AVI file.
+                else:
+                    pass
 
+                if self.parent.toolbar.snapshot_flag == True:
+                    print "Snapshot pressed"
+                    timenow2 = int(timenow)
+                    gfxPath = os.path.join(head, '%s_t=%ss_Result SNAPSHOT.tiff' % (os.path.splitext(tail)[0],timenow2)) 
+                    cv2.imwrite(gfxPath,imgc)
+                    self.parent.toolbar.snapshot_flag = False
+                else:
+                    pass
+
+           
+
+            #Rescale the image so it doesnt take over the screen
+            imgc = self.rescale_frame(imgc)
+
+
+            
             imgc = cv2.cvtColor(imgc, cv2.COLOR_BGR2RGBA)
             prevImg = Image.fromarray(imgc)
             imgtk = ImageTk.PhotoImage(image=prevImg)
             #Show the image
-            self.cameraview.configure(image=imgtk)
-            self.cameraview.image = imgtk #If you don't have this - it will flicker the image since it gets deleted during one
+            self.imgtk = imgtk
+            self.image_on_canvas_ = self.cameraview.create_image(self.maxwidth/2, self.maxheight/2, anchor=CENTER,image=self.imgtk)
+
 
         except:
             pass
 
+
+class Arduino:
+    def __init__(self, PORTS):
+        # Open the serial ports
+        self.PORTS = PORTS
+
+        ### Finds COM port that the Arduino is on (assumes only one Arduino is connected)
+        wmi = win32com.client.GetObject("winmgmts:")
+        ArduinoComs = []
+        for port in wmi.InstancesOf("Win32_SerialPort"):
+            #print port.Name #port.DeviceID, port.Name
+            if "Arduino" in port.Name:
+                comPort = port.DeviceID
+                ArduinoComs.append(comPort)
+                #print comPort, "is Arduino"
+
+        self.PORTS = []
+        for i,comPort in enumerate(ArduinoComs):
+            print comPort
+            GLOBAL_PORT = serial.Serial(comPort, baudrate=9600, dsrdtr=True)
+            #GLOBAL_PORT.setDTR(True)
+
+            self.PORTS.append (GLOBAL_PORT)
+            #print self.PORTS
+
+    def getports(self):
+        return self.PORTS
+
+
+
+
+    def getData(self):
+        data = [[] for i in range(2)]
+        for i,GLOBAL_PORT in enumerate(self.PORTS):
+            try:
+                print GLOBAL_PORT
+                GLOBAL_PORT.flushInput();GLOBAL_PORT.flushOutput()
+                GLOBAL_PORT.write('.')
+
+                startMarker = ord("<")
+                endMarker = ord(">")
+
+                ck = ""
+                x = "z" # any value that is not an end- or startMarker
+                byteCount = -1 # to allow for the fact that the last increment will be one too many
+
+                # wait for the start character
+                while  ord(x) != startMarker: 
+                    x = GLOBAL_PORT.read()
+
+                # save data until the end marker is found
+                while ord(x) != endMarker:
+                    if ord(x) != startMarker:
+                        ck = ck + x 
+                        byteCount += 1
+                    x = GLOBAL_PORT.read()
+                "print data received = ", ck
+            except:
+                ck = "Nodata:0;Nodata2:0"
+            data[i].append(ck)
+        return data
+
+
+
 class Calculate_Diameter(object):
 
-    def __init__(self,image,multiplication_factor):
+    def __init__(self,image,num_lines, multiplication_factor, ROI):
         image = image
+        
         #print "working out the diameter"
         
-    def calc(self,image,multiplication_factor):
+    def calc(self,image,num_lines, multiplication_factor, ROI):
     # Set up some parameters
+        global delta_height, scale_factor
         ny,nx = image.shape
-        number,navg = 25,10
-        start = int(np.floor(ny/(number+1)))
-        end = number*start
-        thresh = 0
-        
+
+        start_x, start_y = ROI[0]
+        end_x, end_y = ROI[1]
+
+        #print "END"
+        #print end_x,end_y
+        #print nx,ny
+        number,navg = num_lines,20
+        if end_x == nx and end_y == ny:
+            start = int(np.floor(ny/(number+1)))
+            diff = int(np.floor(ny/(number+1)))
+            end = (number+1)*diff
+            thresh = 0
+        else:
+            start_y = int((start_y - delta_height)/scale_factor)
+            end_y = int((end_y - delta_height)/scale_factor)
+            ny = end_y - start_y
+            diff = int(np.floor(ny/(number+1)))
+            start = start_y + diff
+            end = int(start_y + (number+1)*diff)
+            thresh = 0
+
     # The multiplication factor
         scale = multiplication_factor
     # Slice the image
-        data = [np.average(image[y-int(navg/2):y+int(navg/2),:], axis=0) for y in  range(start,end+start,start)]
+        data = [np.average(image[y-int(navg/2):y+int(navg/2),:], axis=0) for y in  range(start,end,diff)]
         data2 = np.array(data)
     #Smooth the datums
-        window = np.ones(11,'d') 
+        window = np.ones(21,'d') 
         smoothed = [np.convolve(window / window.sum(), sig, mode = 'same') for sig in data2]
     #Differentiate the datums
         ddts = [VTutils.diff(sig, 1) for sig in smoothed]
     # Loop through each derivative
-        outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID = VTutils.process_ddts(ddts,thresh,nx,scale)
+        outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID, ODS_flag,IDS_flag,ODlist, IDlist = VTutils.process_ddts(ddts,thresh,nx,scale)
     #Return the data
-        return(outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID,start)
+        return(outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID,start,diff,ODS_flag,IDS_flag,ODlist, IDlist)
 
 
 
@@ -1057,6 +1751,7 @@ class ThreadedClient:
             if(self.queue.empty()):
                 try: # Catch exception on closing the window!
                 # Check if there is an image in the buffer, or an image acuisition in progress
+                    #print "image remaining count = ", mmc.getRemainingImageCount()
                     if (mmc.getRemainingImageCount() > 0 or mmc.isSequenceRunning()):
                     #Check if there is an image in the buffer
                         if mmc.getRemainingImageCount() > 0:
@@ -1068,6 +1763,11 @@ class ThreadedClient:
 
 
     def endApplication(self):
+        global out
+        try:
+            out.release()
+        except:
+            pass
         try:
             mmc.stopSequenceAcquisition()
             mmc.reset()
@@ -1079,8 +1779,46 @@ class ThreadedClient:
         root.destroy()
         self.running = 0
         
-if __name__ == "__main__":
+        
 
+
+rootsplash = tk.Tk()
+rootsplash.overrideredirect(True)
+width = rootsplash.winfo_screenwidth()
+height = rootsplash.winfo_screenheight()
+print "Screen height is = ", height
+print "Screen width is = ", width
+
+
+
+#Load in the splash screen image
+image_file = "Splash.gif"
+
+image = Image.open(image_file)
+image2 = PhotoImage(file=image_file)
+imagewidth = image2.width()
+imageheight = image2.height()
+
+newimagewidth = int(np.floor(width*0.5))
+newimageheight = int(np.floor(height*0.5))
+
+image = image.resize((newimagewidth,newimageheight), Image.ANTIALIAS)
+image = ImageTk.PhotoImage(image)
+
+rootsplash.geometry('%dx%d+%d+%d' % (newimagewidth, newimageheight, width/2 - newimagewidth/2, height/2 - newimageheight/2))
+#width/2 - newimagewidth/2, height/2 - newimageheight/2
+canvas = tk.Canvas(rootsplash, height=height, width=width, bg="darkgrey")
+canvas.create_image(width/2 - newimagewidth/2, height/2 - newimageheight/2, image=image)
+canvas.pack()
+rootsplash.after(3000, rootsplash.destroy)
+rootsplash.mainloop()
+
+
+
+
+
+if __name__ == "__main__":
+    #time.sleep(5)
     global start_time
     start_time=time.time()
     
@@ -1093,13 +1831,23 @@ if __name__ == "__main__":
     root.attributes('-topmost',True)
     root.after_idle(root.attributes,'-topmost',False)
     root.wm_title("VasoTracker") #Makes the title that will appear in the top left
-    #Set the size and/or position
 
+    w, h = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry("%dx%d+0+0" % (w, h))
+    
+    #Set the size and/or position
+    # Other tkinter setting that we do not use anymore
     #root.wm_state('zoomed')
-    root.state("zoomed")
+    #root.state("zoomed")
+    #root.wm_attributes('-fullscreen', 1)
+    #m = root.maxsize()
+    #root.geometry('{}x{}+0+0'.format(*m))
     #root.resizable(0,0) # Remove ability to resize
+    #root.iconify()
     #root.overrideredirect(True)
     #top = Toplevel(root)
+    #top = tk.Toplevel()
+    #top.geometry('%dx%d' % (w, h))
     #root.overrideredirect(1) #hides max min buttons and the big x
 # Go go go!
     client = ThreadedClient(root)
