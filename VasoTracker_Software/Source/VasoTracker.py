@@ -43,7 +43,7 @@
 ## Copyright: Copyright 2018, VasoTracker
 ## Credits: Penelope F Lawton, Matthew D Lee, and Calum Wilson
 ## License: BSD 3-Clause License
-## Version: 1.0.1
+## Version: 1.0.2
 ## Maintainer: Calum Wilson
 ## Email: vasotracker@gmail.com
 ## Status: Production
@@ -76,6 +76,7 @@ ypadding = 1.5 #ypadding just to save time - used for both x and y
 
 # Other imports
 import os
+import sys
 import time
 import datetime
 import threading
@@ -89,6 +90,7 @@ import skimage
 from skimage import measure
 import serial
 import win32com.client
+import webbrowser
 
 # Import Vasotracker functions
 import VTutils
@@ -136,6 +138,7 @@ class GuiPart(tk.Frame):
         print self.filename        
         self.Arduino = Arduino(self)
         self.ports = self.Arduino.getports()
+        self.timeit = TimeIt()
         self.timeit2 = TimeIt2()
         self.OD = None
 
@@ -146,12 +149,12 @@ class GuiPart(tk.Frame):
 
     # Exposure setting
         global exposure
-        exposure = 50
+        exposure = 500
         self.exposure = exposure
 
     # Acquisition rate setting
         global acq_rate
-        acq_rate = 2
+        acq_rate = 0
         self.acq_rate = acq_rate
 
     # Record interval setting
@@ -270,13 +273,18 @@ class GuiPart(tk.Frame):
         #self.toolbar.grid_propagate(0)
 
     # Make the status bar along the bottom
-        self.status_bar = ttk.Label(text = 'Thank you for using VasoTracker.', relief=SUNKEN, anchor='w')
+        def callback(event):
+            webbrowser.open_new(r"http://www.vasotracker.com")
+        self.status_bar = ttk.Label(text = 'Thank you for using VasoTracker. To support us, please cite VasoTracker (click here for the paper).', relief=SUNKEN, anchor='w')
+        
         self.status_bar.pack(side=BOTTOM, fill=X)
+        self.status_bar.bind("<Button-1>", callback)
 
     # Make the graph frame
         self.graphframe = GraphFrame(self)
         self.graphframe.grid(row=1, column=0, rowspan=4,columnspan=2, padx=ypadding, pady=ypadding, sticky=E+S+W+N)
         self.graphframe.grid(sticky='nswe')
+        print "this is the height: ", self.graphframe.winfo_height()
         #self.graphframe.rowconfigure(0, weight=1)
         #self.graphframe.columnconfigure(0, weight=1)
         #self.graphframe.grid_propagate(0)
@@ -288,12 +296,15 @@ class GuiPart(tk.Frame):
         #self.tableframe.rowconfigure(0, weight=1)
         #self.tableframe.columnconfigure(0, weight=1)
         #self.tableframe.grid_propagate(0)
- 
+
+
+    #Update everything so that the frames are all the correct size. We need to do this so we can size the graph/image before we place them.
         self.toolbar.update()
         self.status_bar.update()
         #self.graphframe.update()
         self.tableframe.update()
         self.toolbar.update()
+
 
     # Make the Camera Frame bottom right
         self.cameraframe = CameraFrame(self)
@@ -302,6 +313,10 @@ class GuiPart(tk.Frame):
         #self.cameraframe.rowconfigure(0, weight=3)
         #self.cameraframe.columnconfigure(0, weight=2)
         #self.cameraframe.grid_propagate(0)
+
+        print "this is the height: ", self.graphframe.winfo_height()
+        print "this is the width: ", self.graphframe.winfo_width()
+        self.graphframe.mainWidgets() # Now set up the graph
 
         #if self.toolbar.start_flag:
         #    mmc.startContinuousSequenceAcquisition(500)
@@ -342,8 +357,8 @@ class GuiPart(tk.Frame):
     def processIncoming(self, outers, inners, timelist):
         """Handle all messages currently in the queue, if any."""
         while self.queue.qsize(  ):
-            #print "Queue size = ", self.queue.qsize(  )
-            with self.timeit2:
+            print "Queue size = ", self.queue.qsize(  )
+            with self.timeit2("Total"):  # time for optimisation
                 try:
                     if self.toolbar.record_flag:
                         if self.count == 0:
@@ -353,43 +368,38 @@ class GuiPart(tk.Frame):
                         try:
                             mmc.setProperty('Focus', "Position", self.count)
                             #print "the count is this:", self.count
+                            #print mmc.getProperty('Camera', 'Resolved path')
                         except:
                             pass
+
+
                         
                     #Get the image
                         msg = self.queue.get(0)
 
-                    # Check contents of message and do whatever is needed. As a simple test, print it (in real life, you would suitably update the GUI's display in a richer fashion).
-                        #Get the time
-                        timenow = time.time() - start_time
-                        #print "Checkbox Status = ", self.toolbar.record_is_checked.get()
-                        if self.toolbar.record_is_checked.get() == 1:# and self.count%self.rec_interval == 0:
-                            timenow2 = int(timenow)
-                            directory = os.path.join(head, 'RawTiff\\')
-                            if not os.path.exists(directory):
-                                os.makedirs(directory)
-                            gfxPath = os.path.join(directory, '%s_f=%s.tiff' % (os.path.splitext(tail)[0],str(self.count).zfill(6))) 
-                            skimage.io.imsave(gfxPath, msg)
-                        if self.toolbar.ROI_is_checked.get() == 1:
-                            self.ROI = ((self.cameraframe.start_x,self.cameraframe.start_y), (self.cameraframe.end_x, self.cameraframe.end_y))
-                        else: 
-                            self.ROI = ((0,0),(int(msg.shape[1]),int(msg.shape[0])) )    
 
+                    # Process the acquired image
+                        timenow = time.time() - start_time #Get the time
+                    # Get ROI
+                        if self.toolbar.ROI_is_checked.get() == 1: # Get ROI
+                            self.ROI = ((self.cameraframe.start_x,self.cameraframe.start_y), (self.cameraframe.end_x, self.cameraframe.end_y))
+                        else: # Set ROI to image bounds
+                            self.ROI = ((0,0),(int(msg.shape[1]),int(msg.shape[0])) )    
+                    # Calculate diameter    
                         self.calculate_diameter = Calculate_Diameter(self,self.num_lines,self.multiplication_factor, self.ROI)
                         global OD
                         global ID, T, P1, P2
+                        #with self.timeit("Calculate diameter"): # time for optimisation
                         outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID,start,diff, ODS_flag,IDS_flag,ODlist,IDlist = self.calculate_diameter.calc(msg, self.num_lines,self.multiplication_factor, self.ROI)
-                        if self.count == 0:
-                            global initOD, initID
-                            initOD = OD
-                            initID = ID
-                        params = timenow,outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,start,diff,ODS_flag,IDS_flag, self.ROI
 
+                        params = timenow,outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,start,diff,ODS_flag,IDS_flag, self.ROI
+                        #with self.timeit("process queue!"): # time for optimisation
                         self.cameraframe.process_queue(params,msg,self.count2)
                         timelist.append(timenow)
                         #print timelist
                         outers.append(OD)
                         inners.append(ID)
+                        #with self.timeit("plot the graph"): # time for optimisation
                         self.graphframe.plot(timelist,outers,inners,self.toolbar.xlims, self.toolbar.ylims, self.toolbar.xlims2, self.toolbar.ylims2)    
                         self.count += 1
 
@@ -400,6 +410,8 @@ class GuiPart(tk.Frame):
                         self.toolbar.update_pressure(P1,P2, (P1+P2)/2)
                         self.toolbar.update_diam(OD,ID)
                         self.toolbar.update_time(timenow)
+                        global acqrate
+                        self.toolbar.update_acq_rate(acqrate)
 
                         savedata = timenow,OD,ID, T, P1, P2, (P1+P2)/2
                         savedata2 = [timenow]+ODlist
@@ -455,14 +467,24 @@ class setCamera(object):
             mmc.setProperty(DEVICE[0], 'PixelClockMHz', 5)
             mmc.setProperty(DEVICE[0], 'PixelType', '8bit')
             mmc.setExposure(exposure)
+
+        if camera_label == "OpenCV":
+            print "Camera Selected: ", camera_label
+            mmc.loadSystemConfiguration3('OpenCV.cfg')
+            print "loaded the config file."
+            print "exposure is: ", exposure
+            mmc.setProperty('OpenCVgrabber', 'PixelType', '8bit')
+            mmc.setExposure(exposure)
+
+
         elif camera_label == "FakeCamera":
             print "Camera Selected: ", camera_label
             DEVICE = ['Camera', 'FakeCamera', 'FakeCamera'] #camera properties - micromanager creates these in a file
             mmc.loadDevice(*DEVICE)
             mmc.initializeDevice(DEVICE[0])
             mmc.setCameraDevice(DEVICE[0])
-            print "exposure is: ", 500
-            mmc.setExposure(500)
+            print "exposure is: ", exposure
+            mmc.setExposure(exposure)
             mmc.setProperty(DEVICE[0], 'PixelType', '8bit')
             mmc.setProperty(DEVICE[0], 'Path mask', 'SampleData\\TEST?{4.0}?.tif') #C:\\00-Code\\00 - VasoTracker\\
             # To load in a sequence 
@@ -530,6 +552,14 @@ class ToolBar(tk.Frame):
         timestring = str(datetime.timedelta(seconds=time))[:-4]
         self.time_entry.insert(0, timestring)
         self.time_entry.config(state='DISABLED')
+
+    def update_acq_rate(self, acqrate):
+        #Update the temperature widget
+        self.acq_rate__entry.config(state='normal')
+        self.acq_rate__entry.delete(0, 'end')
+        acqratestring = str(acqrate)
+        self.acq_rate__entry.insert(0, acqratestring)
+        self.acq_rate__entry.config(state='DISABLED')
         
     # Function that changes the exposure on enter key
     def update_exposure(self,event):
@@ -543,6 +573,8 @@ class ToolBar(tk.Frame):
                 exp = 500
             self.exposure_entry.delete(0, 'end')
             self.exposure_entry.insert('0', exp) 
+            if exp < 250:
+                tmb.showinfo("Warning", "Except for ThorCam, we recommend an exposure between 250 ms and 500ms")
 
             print "Setting exposure to:", exp
             self.parent.exposure = int(exp)
@@ -606,6 +638,7 @@ class ToolBar(tk.Frame):
             self.parent.multiplication_factor = scale
             scale_prevcontents = scale
             multiplication_factor = scale
+            
         except:
             print "Scale remaining at:", scale_prevcontents
             self.scale_entry.delete(0, 'end')
@@ -660,7 +693,7 @@ class ToolBar(tk.Frame):
                 print "You can't change the camera whilst acquiring images!"
                 return
 
-        self.camoptions = ["...","Thorlabs","FakeCamera"]
+        self.camoptions = ["...","Thorlabs","OpenCV", "FakeCamera"]
         variable = StringVar()
         variable.set(self.camoptions[0])
         self.camera_entry = ttk.OptionMenu(source_group, variable,self.camoptions[0], *self.camoptions, command= lambda _: set_cam(self))
@@ -820,6 +853,7 @@ class ToolBar(tk.Frame):
         def set_button_function(get_coords):
             if get_coords == True:
                 self.coord_limits()
+                self.parent.graphframe.mainWidgets()
             if get_coords == False:
                 pass
 
@@ -832,9 +866,13 @@ class ToolBar(tk.Frame):
                     outer_xmin_entry.insert('0', self.x_min_default), outer_xmax_entry.insert('0', self.x_max_default)
                     outer_ymin_entry.delete(0, END), outer_ymax_entry.delete(0, END)
                     outer_ymin_entry.insert('0', self.y_min_default), outer_ymax_entry.insert('0', self.y_max_default)
+                    self.parent.graphframe.update_scale()
+                    print "it did it"
                 else:
                     self.xlims = (self.x_min_label.get(),self.x_max_label.get())
                     self.ylims = (self.y_min_label.get(),self.y_max_label.get())
+                    self.parent.graphframe.update_scale()
+                    print "it did it"
                 return self.xlims, self.ylims
                 get_coords = False
             else:
@@ -1054,7 +1092,7 @@ class GraphFrame(tk.Frame):
     min_x = 0
     max_x = 10
     def __init__(self,parent):
-        tk.Frame.__init__(self, parent)#, highlightthickness=2, highlightbackground="#111")
+        tk.Frame.__init__(self, parent, bg = "yellow")#, highlightthickness=2, highlightbackground="#111")
         self.parent = parent
         self.top = Frame()
         self.top.update_idletasks()
@@ -1073,16 +1111,33 @@ class GraphFrame(tk.Frame):
         self.delta_i = 1
         self.n_data = 100000000
         self.update = 1
-        self.timeit = TimeIt()
-        self.mainWidgets()
+        #self.mainWidgets()
         
+    def update_scale(self, blit=True): #### NEE
+        print "attempting to update a blitted axis"
+        self.graphview.ax1.set_xlim(self.parent.toolbar.xlims[0],self.parent.toolbar.xlims[1]) # Outer diameter
+        self.graphview.ax1.set_ylim(self.parent.toolbar.ylims[0],self.parent.toolbar.ylims[1]) # Outer diameter
+
+        self.graphview.figure.canvas.draw()
+
     
  
 
 
-    def mainWidgets(self,blit=False):   
+    def mainWidgets(self,blit=True):  
+        #
+        # We want to explicitly set the size of the graph so that we can blit
+        print "this is the height: ", self.parent.graphframe.winfo_height()
+        print "this is the width: ", self.parent.graphframe.winfo_width()
+
         self.graphview = tk.Label(self)
-        self.graphview.figure,(self.graphview.ax1,self.graphview.ax2) = plt.subplots(2,1)
+        #print "Graph width: ", self.graphview.winfo_width()
+        #print "Graph height: ", self.parent.graphframe.winfo_height()
+        default_figsize = (plt.rcParams.get('figure.figsize'))
+        print "default fig size = ", default_figsize
+        other_figsize = [self.parent.graphframe.winfo_width()/100,self.parent.graphframe.winfo_height()/100]
+        print other_figsize
+        self.graphview.figure,(self.graphview.ax1,self.graphview.ax2) = plt.subplots(2,1, figsize=other_figsize)
         #self.graphview.figure = pyplot.figure()
         #self.graphview.ax1 = self.graphview.figure.add_subplot(211)
         #self.graphview.ax2 = self.graphview.figure.add_subplot(212)
@@ -1101,18 +1156,34 @@ class GraphFrame(tk.Frame):
         self.graphview.ax2.set_ylabel('Lumen diameter (um)', fontsize=14) # Inner diameter labels
 
 
-        self.graphview.figure.canvas.draw()
+
         self.graphview.figure.canvas = FigureCanvasTkAgg(self.graphview.figure, self)
-        self.graphview.figure.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
-        
+        self.graphview.figure.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=None, expand=False) ##### THIS IS THE PROBLEM WITH BLITTING HERE. WE NEED TO EXPLICITLY STATE THE FIGURE SIZE ABOVE!!
+        print "Graph width: ", self.graphview.figure.canvas.get_tk_widget().winfo_width()
+        self.graphview.figure.canvas.draw()
+        print "Graph width: ", self.graphview.figure.canvas.get_tk_widget().winfo_width()
 
         if blit:
         # Get the background
             self.ax1background = self.graphview.figure.canvas.copy_from_bbox(self.graphview.ax1.bbox)
             self.ax2background = self.graphview.figure.canvas.copy_from_bbox(self.graphview.ax2.bbox)
 
+            print "bounding box = ", self.graphview.ax1.bbox.get_points()
+            bbarrray = self.graphview.ax1.bbox.get_points()
+            from matplotlib.transforms import Bbox
 
-    def on_running(self, xdata, ydata1,ydata2,xlims,ylims, xlims2,ylims2,blit=False):
+            my_blit_box = Bbox(bbarrray)
+            #my_blit_box = Bbox(np.array([[x0,y0],[x1,y1]]))
+            my_blit_box = Bbox.from_bounds(bbarrray[0][0], bbarrray[0][1], (bbarrray[1][0]-bbarrray[0][0])*1.5, bbarrray[1][1]-bbarrray[0][1])
+            print "bounding box = ", my_blit_box.get_points()
+            self.ax1background = self.graphview.figure.canvas.copy_from_bbox(my_blit_box)
+        
+
+
+
+
+
+    def on_running(self, xdata, ydata1,ydata2,xlims,ylims, xlims2,ylims2,blit=True):
     # Set the axis values
         self.graphview.ax1.set_xlim(xlims[0],xlims[1]) # Outer diameter
         self.graphview.ax1.set_ylim(ylims[0],ylims[1]) # Outer diameter
@@ -1180,45 +1251,48 @@ class GraphFrame(tk.Frame):
                                                 color="red", linewidth = 3)
 
 
-            with self.timeit:
-                self.graphview.figure.canvas.draw()
-                self.graphview.figure.canvas.get_tk_widget().update_idletasks()
-                #self.after(2,self.plotter)
-                #self.graphview.figure.canvas.flush_events()
+            self.graphview.figure.canvas.draw()
+            self.graphview.figure.canvas.get_tk_widget().update_idletasks()
+            #self.after(2,self.plotter)
+            #self.graphview.figure.canvas.flush_events()
         if blit == True:
-            with self.timeit:
-                self.graphview.figure.canvas.restore_region(self.ax1background)
-                self.graphview.figure.canvas.restore_region(self.ax2background)
+            self.graphview.figure.canvas.restore_region(self.ax1background)
+            self.graphview.figure.canvas.restore_region(self.ax2background)
 
-                try:
-                    self.graphview.ax1.lines.remove(self.graphview.line)
-                    self.graphview.ax2.lines.remove(self.graphview.line2)
-                except:
-                    pass
-
+            try:
+                self.graphview.ax1.lines.remove(self.graphview.line)
+                self.graphview.ax2.lines.remove(self.graphview.line2)
+            except:
+                pass
 
 
-                self.graphview.line.set_xdata(xdata3[::-1][0::int(self.delta_i)][::-1])
-                self.graphview.line.set_ydata(ydata1C[::-1][0::int(self.delta_i)][::-1])
+
+            self.graphview.line.set_xdata(xdata3[::-1][0::int(self.delta_i)][::-1])
+            self.graphview.line.set_ydata(ydata1C[::-1][0::int(self.delta_i)][::-1])
+            self.graphview.line.set_color('blue')
 
 
-                self.graphview.line2.set_xdata(xdata3[::-1][0::int(self.delta_i)][::-1])
-                self.graphview.line2.set_ydata(ydata2C[::-1][0::int(self.delta_i)][::-1])
+            self.graphview.line2.set_xdata(xdata4[::-1][0::int(self.delta_i)][::-1])
+            self.graphview.line2.set_ydata(ydata2C[::-1][0::int(self.delta_i)][::-1])
+            self.graphview.line2.set_color('red')
 
-                # redraw just the points
-                self.graphview.ax1.draw_artist(self.graphview.line)
-                self.graphview.ax2.draw_artist(self.graphview.line2)
+            # redraw just the points
+            self.graphview.ax1.draw_artist(self.graphview.line)
+            self.graphview.ax2.draw_artist(self.graphview.line2)
 
-                # fill in the axes rectangle
-                self.graphview.figure.canvas.blit(self.graphview.ax1.bbox)
-                self.graphview.figure.canvas.blit(self.graphview.ax2.bbox)
+            # fill in the axes rectangle
+            self.graphview.figure.canvas.blit(self.graphview.ax1.bbox)
+            self.graphview.figure.canvas.blit(self.graphview.ax2.bbox)
 
-                self.graphview.figure.canvas.draw_idle()
-                #self.graphview.figure.canvas.flush_events()
+            #self.graphview.figure.canvas.draw_idle()
+            #self.graphview.figure.canvas.flush_events()
 
-                #self.graphview.figure.canvas.update()
-                #self.graphview.figure.canvas.flush_events()
-                #self.graphview.figure.canvas.get_tk_widget().update_idletasks()
+            #self.graphview.figure.canvas.update()
+            #self.graphview.figure.canvas.flush_events()
+            #self.graphview.figure.canvas.get_tk_widget().update_idletasks()
+
+
+
 
         #Example
     def plot(self, timelist, outers, inners,xlims,ylims, xlims2, ylims2):
@@ -1236,6 +1310,7 @@ class GraphFrame(tk.Frame):
         return
 
 # Class for timing processes
+'''
 class TimeIt():
     from datetime import datetime
     def __enter__(self):
@@ -1249,6 +1324,37 @@ class TimeIt2():
         self.tic = self.datetime.now()
     def __exit__(self, *args, **kwargs):
         print('process queue runtime: {}'.format(self.datetime.now() - self.tic))
+'''
+
+class TimeIt():
+    from datetime import datetime
+    def __init__(self):
+        self.name = None
+    def __call__(self, name):
+        self.name = name
+        return self
+    def __enter__(self):
+        self.tic = self.datetime.now()
+        return self
+    def __exit__(self,name, *args, **kwargs):
+        print('process ' + self.name + ' runtime: {}'.format(self.datetime.now() - self.tic))##]]
+
+class TimeIt2():
+    from datetime import datetime
+    def __init__(self):
+        self.name = None
+    def __call__(self, name):
+        self.name = name
+        return self
+    def __enter__(self):
+        self.tic = self.datetime.now()
+        return self
+    def __exit__(self,name, *args, **kwargs):
+        print('process ' + self.name + ' runtime: {}'.format(self.datetime.now() - self.tic))##]]
+
+
+
+
 
 class TableFrame(tk.Frame):
     def __init__(self,parent):
@@ -1272,7 +1378,6 @@ class TableFrame(tk.Frame):
             try:
                 OutDiam = float(OD)
                 InDiam = float(ID)
-                initOutDiam, initInDiam = float(initOD), float(initID)
                 Label = table_text_entry.get()
                 Time = (time.time() - start_time)
                 Time = float(Time)
@@ -1366,7 +1471,7 @@ class CameraFrame(tk.Frame):
               
     def mainWidgets(self):
         # Get the max dimensions that the Canvas can be
-        self.maxheight = self.parent.graphframe.winfo_height() - self.parent.tableframe.winfo_height()
+        self.maxheight = self.parent.graphframe.winfo_height() - self.parent.tableframe.winfo_height() - self.parent.status_bar.winfo_height()
         self.maxwidth = self.parent.status_bar.winfo_width() -  self.parent.graphframe.winfo_width()
         # Set up the Canvas that we will show the image on
         self.cameraview = tk.Canvas(self, width=self.maxwidth, height=self.maxheight, background='white')
@@ -1646,6 +1751,7 @@ class Calculate_Diameter(object):
 
     def __init__(self,image,num_lines, multiplication_factor, ROI):
         image = image
+        self.timeit2 = TimeIt2()
         
         #print "working out the diameter"
         
@@ -1681,17 +1787,29 @@ class Calculate_Diameter(object):
         data = [np.average(image[y-int(navg/2):y+int(navg/2),:], axis=0) for y in  range(start,end,diff)]
         data2 = np.array(data)
     #Smooth the datums
-        window = np.ones(21,'d') 
+        window = np.ones(21,'d')
         smoothed = [np.convolve(window / window.sum(), sig, mode = 'same') for sig in data2]
     #Differentiate the datums
-        ddts = [VTutils.diff(sig, 1) for sig in smoothed]
-    # Loop through each derivative
+
+    # This if the original function used to differentiate
+        #with self.timeit2("Differentiate 1"): 
+        #    ddts = [VTutils.diff(sig, 1) for sig in smoothed]
+    # But this one is much faster!
+        ddts = [VTutils.diff2(sig, 1) for sig in smoothed]
+        window = np.ones(11,'d')
+        ddts = [np.convolve(window / window.sum(), sig, mode = 'same') for sig in ddts]
+        #with self.timeit2("Differentiate 3"): 
+        #    ddts = [VTutils.diff3(sig, 1) for sig in smoothed]
+    # Loop through each derivative 
         outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID, ODS_flag,IDS_flag,ODlist, IDlist = VTutils.process_ddts(ddts,thresh,nx,scale)
     #Return the data
         return(outer_diameters1,outer_diameters2,inner_diameters1,inner_diameters2,OD,ID,start,diff,ODS_flag,IDS_flag,ODlist, IDlist)
 
 
 
+##################################################
+## Threaded client, check if there are images and process the images in seperate threads
+##################################################
 class ThreadedClient:
     """
     Launch the main part of the GUI and the worker thread. periodicCall and
@@ -1706,10 +1824,8 @@ class ThreadedClient:
         """
         #threading.Thread.daemon = True # Make sure the thread terminates on exit
         self.master = master
-
         # Create the queue
         self.queue = Queue.Queue(  )
-
         # Set up the GUI part
         self.gui = GuiPart(master, self.queue, self.endApplication)
 
@@ -1727,19 +1843,20 @@ class ThreadedClient:
         self.timelist = []
         self.periodicCall(  )
 
+        self.acqrate = None
+
     def periodicCall(self):
         """
         Check every 10 ms if there is something new in the queue.
         """
         if self.running:
             self.gui.processIncoming( self.timelist, self.inners, self.outers )
+            self.master.after(10, self.periodicCall)
         if not self.running:
             # This is the brutal stop of the system. You may want to do
             # some cleanup before actually shutting it down.
-            import sys
             sys.exit(1)
-        if self.running:
-            self.master.after(10, self.periodicCall)
+            
 
     def workerThread1(self):
         """
@@ -1747,6 +1864,7 @@ class ThreadedClient:
         a 'select(  )'. One important thing to remember is that the thread has
         to yield control pretty regularly, by select or otherwise.
         """
+        self.timenow = 0
         while self.running:
             if(self.queue.empty()):
                 try: # Catch exception on closing the window!
@@ -1754,59 +1872,78 @@ class ThreadedClient:
                     #print "image remaining count = ", mmc.getRemainingImageCount()
                     if (mmc.getRemainingImageCount() > 0 or mmc.isSequenceRunning()):
                     #Check if there is an image in the buffer
+                        #if mmc.getRemainingImageCount > 1:
+                        #    mmc.clearCircularBuffer()
                         if mmc.getRemainingImageCount() > 0:
+                            
                             timenow = time.time() - start_time #Get the time
-                            img = mmc.popNextImage() # Get the next image.
+                            global acqrate
+                            acqrate = 1/(timenow - self.timenow)
+                            self.timenow = timenow
+                            img = mmc.popNextImage() #mmc.getLastImage()## Get the next image. 
+
+                            # Binning
+                            '''
+                            new_shape = tuple(ti/2 for ti in img.shape)
+                            def rebin(arr, new_shape):
+                                #"""Rebin 2D array arr to shape new_shape by averaging."""
+                                shape = (int(new_shape[0]), int(arr.shape[0] // new_shape[0]),int(new_shape[1]), int(arr.shape[1] // new_shape[1]))
+                                return arr.reshape(shape).mean(-1).mean(1).astype(int)
+                            img = rebin(img, new_shape)
+                            img = np.array(img, dtype=np.uint8)
+                            '''
+
                             self.queue.put(img) # Put the image in the queue
+
+                            # Save raw image:
+                            if self.gui.toolbar.record_is_checked.get() == 1:# and self.count%self.rec_interval == 0:
+                                timenow2 = int(timenow)
+                                directory = os.path.join(head, 'RawTiff\\')
+                                if not os.path.exists(directory):
+                                    os.makedirs(directory)
+                                gfxPath = os.path.join(directory, '%s_f=%s.tiff' % (os.path.splitext(tail)[0],str(self.gui.count).zfill(6))) 
+                                skimage.io.imsave(gfxPath, img)
+
                 except:
                     pass
-
-
+    """
+     This is a function that cleans up on
+    exit. It should kill all processes properly.
+    """
     def endApplication(self):
-        global out
         try:
-            out.release()
-        except:
-            pass
-        try:
-            mmc.stopSequenceAcquisition()
-            mmc.reset()
+            mmc.stopSequenceAcquisition() # stop uManager acquisition
+            mmc.reset() # reset uManager
         except:
             pass
         self.running = 0
         #sys.exit()
         root.quit()
         root.destroy()
-        self.running = 0
-        
-        
 
-
+##################################################
+## Splash screen
+##################################################
 rootsplash = tk.Tk()
 rootsplash.overrideredirect(True)
-width = rootsplash.winfo_screenwidth()
-height = rootsplash.winfo_screenheight()
-print "Screen height is = ", height
-print "Screen width is = ", width
+width, height = rootsplash.winfo_screenwidth(), rootsplash.winfo_screenheight()
 
-
+#print "Screen height is = ", height
+#print "Screen width is = ", width
 
 #Load in the splash screen image
-image_file = "Splash.gif"
-
+image_file = "Splash.gif" 
 image = Image.open(image_file)
 image2 = PhotoImage(file=image_file)
-imagewidth = image2.width()
-imageheight = image2.height()
 
-newimagewidth = int(np.floor(width*0.5))
-newimageheight = int(np.floor(height*0.5))
-
+# Scale to half screen, centered
+imagewidth, imageheight = image2.width(), image2.height()
+newimagewidth, newimageheight = int(np.floor(width*0.5)),  int(np.floor(height*0.5))
 image = image.resize((newimagewidth,newimageheight), Image.ANTIALIAS)
 image = ImageTk.PhotoImage(image)
 
+# Create and show for 3 seconds
 rootsplash.geometry('%dx%d+%d+%d' % (newimagewidth, newimageheight, width/2 - newimagewidth/2, height/2 - newimageheight/2))
-#width/2 - newimagewidth/2, height/2 - newimageheight/2
 canvas = tk.Canvas(rootsplash, height=height, width=width, bg="darkgrey")
 canvas.create_image(width/2 - newimagewidth/2, height/2 - newimageheight/2, image=image)
 canvas.pack()
@@ -1814,16 +1951,17 @@ rootsplash.after(3000, rootsplash.destroy)
 rootsplash.mainloop()
 
 
-
-
+##################################################
+## Main application loop
+##################################################
 
 if __name__ == "__main__":
-    #time.sleep(5)
     global start_time
     start_time=time.time()
     
 # Set up the camera
     mmc = MMCorePy.CMMCore()
+
 # Create the main window
     rand = random.Random(  )
     root = tk.Tk(  )
@@ -1831,24 +1969,12 @@ if __name__ == "__main__":
     root.attributes('-topmost',True)
     root.after_idle(root.attributes,'-topmost',False)
     root.wm_title("VasoTracker") #Makes the title that will appear in the top left
-
-    w, h = root.winfo_screenwidth(), root.winfo_screenheight()
-    root.geometry("%dx%d+0+0" % (w, h))
-    
-    #Set the size and/or position
-    # Other tkinter setting that we do not use anymore
-    #root.wm_state('zoomed')
-    #root.state("zoomed")
-    #root.wm_attributes('-fullscreen', 1)
-    #m = root.maxsize()
-    #root.geometry('{}x{}+0+0'.format(*m))
-    #root.resizable(0,0) # Remove ability to resize
-    #root.iconify()
-    #root.overrideredirect(True)
-    #top = Toplevel(root)
-    #top = tk.Toplevel()
-    #top.geometry('%dx%d' % (w, h))
+    root.state("zoomed")
+    root.resizable(0,0) # Remove ability to resize
+    #w, h = root.winfo_screenwidth(), root.winfo_screenheight() # Can set the window size using the screenwidth if we wish
+    #root.geometry("%dx%d+0+0" % (w, h))
     #root.overrideredirect(1) #hides max min buttons and the big x
+    #root.wm_attributes('-fullscreen', 1)
 # Go go go!
     client = ThreadedClient(root)
     root.mainloop(  )
