@@ -17,6 +17,19 @@ def diff(sig, n):
     ddt = np.array(ddt)
     return ddt
 
+def diff2(sig, n):
+    dx = 1/n
+    ddt = np.convolve(sig, [1,-1]) / dx# ndimage.gaussian_filter1d(sig, sigma=6, order=1, mode='nearest') / dx
+    ddt = np.array(ddt)
+    return ddt
+
+def diff3(sig, n):
+    dx = 1/n
+    ddt = np.diff(sig) / dx# ndimage.gaussian_filter1d(sig, sigma=6, order=1, mode='nearest') / dx
+    ddt = np.array(ddt)
+    return ddt
+
+
 # Peak finding function
 
 def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
@@ -187,7 +200,18 @@ def _plot(x, mph, mpd, threshold, edge, valley, ax, ind):
         # plt.grid()
         plt.show()
 
-
+class TimeIt():
+    from datetime import datetime
+    def __init__(self):
+        self.name = None
+    def __call__(self, name):
+        self.name = name
+        return self
+    def __enter__(self):
+        self.tic = self.datetime.now()
+        return self
+    def __exit__(self,name, *args, **kwargs):
+        print('process ' + self.name + ' runtime: {}'.format(self.datetime.now() - self.tic))##]]
 
 
 def process_ddts(ddts,thresh,nx,scale):
@@ -198,6 +222,7 @@ def process_ddts(ddts,thresh,nx,scale):
     ODS = []
     IDS = []
     scale = scale
+    timeit = TimeIt()
     for j,ddt in enumerate(ddts):
         #Get local extrema positions
         valley_indices = detect_peaks(ddt, mph=0.04, mpd=1, valley=True)
