@@ -37,7 +37,7 @@ int max_temp = 40;
 
 // < Function for reading >
 int readkeypad(){
-  int adc_key_in = analogRead(0); //
+  int adc_key_in = analogRead(5); //
   int ret = btnUNKNOWN;
   
   if (adc_key_in < 50) ret = btnRIGHT;
@@ -162,6 +162,9 @@ void loop(void) {
   
   Serial.print("Temperature2");
   Serial.print(":");
+  Serial.print(temperature);
+  Serial.print(";");
+
   Serial.print(temperature);
   Serial.print(";");
   
