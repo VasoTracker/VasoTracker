@@ -37,7 +37,7 @@ LEGO™ Encolsure|LEGO|-|-|-|-
 
 To build the temperature controller, there is a little bit of soldering involved:
 
-<img src=https://github.com/kaelome/VasoTracker/blob/master/VasoTracker_Temperature_Controller/Images/Arduino%20Temp%20Controller.jpg>
+<img src=https://github.com/VasoTracker/VasoTracker/blob/master/VasoTracker_Temperature_Controller/Images/Arduino%20Temp%20Controller.jpg>
 </br>
 Temperature controller schematic created using the breadboard view in Fritzing (http://fritzing.org/home/)
 
