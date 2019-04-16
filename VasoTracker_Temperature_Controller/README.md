@@ -12,9 +12,9 @@ An Arduino-based temperature controller for the VasoTracker myograph system.
 
 * **Writes data to serial port for acquisition and display by the VasoTracker GUI**
 
-## Building the VasoTracker Temperature Controller:
+## Required components:
 
-The VasoTracker Temperature Controller (with teperature sensor and two heating elements) can be built for ~£75. Here is a table of the components required:
+The VasoTracker Temperature Controller (with temperature sensor and two heating elements) can be built for ~£75. Here is a table of the components required:
 
 **Parts**|**Supplier**|**Part #**|**Qty**|**£/unit**|**Total (£)**
 :-----:|:-----:|:-----:|:-----:|:-----:|:-----:
@@ -32,16 +32,18 @@ Arduino R3 Stackable Headers|Sparkfun Electronics|PRT-10007|1|1.14|1.14
 LEGO™ Encolsure|LEGO|-|-|-|-
  | | | |**Subtotal**|**76.57**
 
+
+## Building the VasoTracker Temperature Controller:
+
 To build the temperature controller, there is a little bit of soldering involved:
 
 <img src=https://github.com/kaelome/VasoTracker/blob/master/VasoTracker_Temperature_Controller/Images/Arduino%20Temp%20Controller.jpg>
+</br>
 Temperature controller schematic created using the breadboard view in Fritzing (http://fritzing.org/home/)
 
 1.	Build the temperature sensor / heating circuit on the Arduino Proto shield, as shown in image above. Note that the heating elements (resistors) are connected to the Temperature controller via jumper cables and screw terminals mounted on the Proto Shield. Similarly, the temperature sensor is connected to a screw terminal mounted on the Proto Shield.
 2.	Stack the completed Proto shield on top of the Arduino Uno.
 3.	Place stackable headers on top of the Proto Shield (these are required to allow clearance for the pressure transducer connections and bend the A0 pin1 on the stackable header so that it does not connect to the Arduino Uno board.
-
-  ** (for pictures of this step onwards, check the similar instructions for the pressure controller here: https://github.com/kaelome/VasoTracker/tree/master/VasoTracker_Pressure_Monitor)**
 4.	Stack the LCD Shield on top of the stackable headers.
 5.	Use a female 1-pin jumper cable to connect the disconnected pin on the stackable header to the A5 pin on top of the LCD shield.
 6.	 Wrap one end of a wire around the Arduino reset pin and another around Vin (5V).
@@ -51,6 +53,7 @@ Temperature controller schematic created using the breadboard view in Fritzing (
 
 **Notes:**
 1. The A000077 Proto Shield is being discontinued. Many other suppliers sell equivalent prototyping boards (e.g. Adafruit 2077 Proto Shield).
+2. For pictures of Step 3 onwards, check the similar instructions for the pressure controller here: https://github.com/VasoTracker/VasoTracker/tree/master/VasoTracker_Pressure_Monitor)**
 2. The LCD shield uses the A0 pin for buttons. However, we (stupidly) connected our thermistor to A0. By bending the A0 pin on the stackable header and connecting it to A5 on the LCD shield, we are rerouting A0 on the LCD shield to A5 (thus enabling the thermistor to use A0). Obviously, by connecting the thermistor to A5, and altering the Arduino code, this step could be avoided!
 3. Should prevent accidental resetting of the Arduino (which would be annoying if it occurred during an experiment)... connect reset pin to 5V via 120 ohm resistor
 4. As an alternative to soldering the components onto the Arduino Proto Shield, an Arduino Proto Shield with Mini Breadboard could be used.
