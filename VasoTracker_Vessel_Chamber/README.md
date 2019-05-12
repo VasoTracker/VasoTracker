@@ -39,36 +39,36 @@ Here is a table of the custom components required:
 
 Here are the other required components:
 
-**Parts**| |**Supplier**|**Part #**|**Qty**|**£/unit**|**Total (£)**
+**Parts** | **Supplier** | **Part #** | **Qty** | **£/unit** | **Total (£)**
 :-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
-||||||
-**Imaging Chamber** ||||||
- |25mm diameter cover glass (100 pieces)|Scientific Lab Supplies|MIC3320|1|18.66|18.66
- |M3 thumb screws (Come in a pack of 10)|RS|664-4637|1|4.7|4.7
- ||||||
-**Cannula arms** ||||||
- |3-axis translation stage|Thorlabs|DT12XYZ/M|2|231.80|463.60
- |Screw thread adapter|Thorlabs|AP4M3M|4|1.48|5.92
- |13 mm metal rod|Thorlabs|MS05R/M|2|4.51|9.02
- |38 mm metal rod|Thorlabs|MS1.5R/M|2|4.93|9.86
- |75 mm metal rod|Thorlabs|MS3R/M|2|5.97|11.94
- |90 degree rod clamp|Thorlabs|MSRA90|2|12.62|25.24
- |90 degree rod clamp|Thorlabs|ER90B/M|2|10.71|21.42
- |Cannula holder|Siskiyou|MSC-1 M|2|21.00|42.00
- |1.5 mm OD glass capillary glass (225 pieces)|Harvard Apparatus|300058| | |
- ||||||
- **Perfusion attachments** ||||||
- |Neodynium disc magnets (In a pack of 10)|RS|792-4559|4|4.15|16.6
- |Magnetic Clamp for suction tubes|Warner Instruments|MAG-2|4|45.00|180.00
- ||||||
-**Tubing & Connectors** ||||||
- |Female luer  (threaded 1/16" barb; pack of 25)|Cole-Palmer|GY-45502-30|1|8.53|8.53
- |Masterflex 1.22 ID tubing (100 ft roll)|Cole-Palmer|WZ-06460-31|1|96|96
- |Female luer (1/16" barb; pack of 25)|Cole-Palmer|GY-45502-00|1|6.36|6.36
- |Male luer (1/16" barb; pack of 25)|Cole-Palmer|GY-45505-00|1|6.46|6.46
- |Luer stopcock (pack of 10)|Cole-Palmer|WZ-30600-02|1|16.94|16.94
- ||||||
- | | | | |**Subtotal**|**1067.19**
+|||||
+**Imaging Chamber** |||||
+ 25mm diameter cover glass (100 pieces)|Scientific Lab Supplies|MIC3320|1|18.66|18.66
+ M3 thumb screws (Come in a pack of 10)|RS|664-4637|1|4.7|4.7
+ |||||
+**Cannula arms** |||||
+ 3-axis translation stage|Thorlabs|DT12XYZ/M|2|231.80|463.60
+ Screw thread adapter|Thorlabs|AP4M3M|4|1.48|5.92
+ 13 mm metal rod|Thorlabs|MS05R/M|2|4.51|9.02
+ 38 mm metal rod|Thorlabs|MS1.5R/M|2|4.93|9.86
+ 75 mm metal rod|Thorlabs|MS3R/M|2|5.97|11.94
+ 90 degree rod clamp|Thorlabs|MSRA90|2|12.62|25.24
+ 90 degree rod clamp|Thorlabs|ER90B/M|2|10.71|21.42
+ Cannula holder|Siskiyou|MSC-1 M|2|21.00|42.00
+ 1.5 mm OD glass capillary glass (225 pieces)|Harvard Apparatus|300058| | |
+ |||||
+ **Perfusion attachments** |||||
+ Neodynium disc magnets (In a pack of 10)|RS|792-4559|4|4.15|16.6
+ Magnetic Clamp for suction tubes|Warner Instruments|MAG-2|4|45.00|180.00
+ |||||
+**Tubing & Connectors** |||||
+ Female luer  (threaded 1/16" barb; pack of 25)|Cole-Palmer|GY-45502-30|1|8.53|8.53
+ Masterflex 1.22 ID tubing (100 ft roll)|Cole-Palmer|WZ-06460-31|1|96|96
+ Female luer (1/16" barb; pack of 25)|Cole-Palmer|GY-45502-00|1|6.36|6.36
+ Male luer (1/16" barb; pack of 25)|Cole-Palmer|GY-45505-00|1|6.46|6.46
+ Luer stopcock (pack of 10)|Cole-Palmer|WZ-30600-02|1|16.94|16.94
+ |||||
+  | | | |**Subtotal**|**1067.19**
 
  To build the VasoTracker chamber, all that is required it to connect the components together:
 
