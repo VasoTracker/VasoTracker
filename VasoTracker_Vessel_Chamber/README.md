@@ -24,22 +24,13 @@ The VasoTracker pressure monitor (with two inline pressure transducers) can be b
 
 Here is a table of the custom components required:
 
-**Custom Imaging Chamber Parts** | **Material** | **Supplier** | **Part #** | **Qty** | **£/unit** |**Total (£)**
-:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
-||||||
- Chamber base   | PMMA | Workshop / Protolabs |-|1|174.39|174.39
- Chamber insert | SS or Delrin | Workshop / Protolabs |-|1|144.21|144.21
- Tubing anchors | PMMA | Workshop / Protolabs |-|2|123.94|247.88
-  | | | | | **Subtotal**|**442.54**
-
-
-  **Parts**| |**Supplier**|**Part #**|**Qty**|**£/unit**|**Total (£)**
-  :-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
-  ||||||
-  **Imaging Chamber** ||||||
-   |25mm diameter cover glass (100 pieces)|Scientific Lab Supplies|MIC3320|1|18.66|18.66
-   |M3 thumb screws (Come in a pack of 10)|RS|664-4637|1|4.7|4.7
-   ||||||
+**Custom Imaging Chamber Parts**| | **Material** | **Supplier** | **Part #** | **Qty** | **£/unit** |**Total (£)**
+:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
+ |||||/||
+ Chamber base   || PMMA | Workshop / Protolabs |-|1|174.39|174.39
+ Chamber insert || SS or Delrin | Workshop / Protolabs |-|1|144.21|144.21
+ Tubing anchors || PMMA | Workshop / Protolabs |-|2|123.94|247.88
+  || | | | | **Subtotal**|**442.54**
 
 Here are the other required components:
 
