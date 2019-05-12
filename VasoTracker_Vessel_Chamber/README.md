@@ -32,6 +32,15 @@ Here is a table of the custom components required:
  Tubing anchors | PMMA | Workshop / Protolabs |-|2|123.94|247.88
   | | | | | **Subtotal**|**442.54**
 
+
+  **Parts**| |**Supplier**|**Part #**|**Qty**|**£/unit**|**Total (£)**
+  :-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
+  ||||||
+  **Imaging Chamber** ||||||
+   |25mm diameter cover glass (100 pieces)|Scientific Lab Supplies|MIC3320|1|18.66|18.66
+   |M3 thumb screws (Come in a pack of 10)|RS|664-4637|1|4.7|4.7
+   ||||||
+
 Here are the other required components:
 
 **Parts**| |**Supplier**|**Part #**|**Qty**|**£/unit**|**Total (£)**
