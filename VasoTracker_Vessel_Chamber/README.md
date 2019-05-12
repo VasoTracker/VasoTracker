@@ -26,6 +26,7 @@ Here is a table of the custom components required:
 
 **Custom Imaging Chamber Parts** | **Material** | **Supplier** | **Part #** | **Qty** | **£/unit** |**Total (£)**
 :-----:|:-----:|:-----:|:-----:|:-----:|:-----:
+||||||
  Chamber base   | PMMA | Workshop / Protolabs |-|1|174.39|174.39
  Chamber insert | SS or Delrin | Workshop / Protolabs |-|1|144.21|144.21
  Tubing anchors | PMMA | Workshop / Protolabs |-|2|123.94|247.88
