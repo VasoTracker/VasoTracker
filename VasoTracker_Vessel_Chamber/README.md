@@ -24,25 +24,16 @@ The VasoTracker pressure monitor (with two inline pressure transducers) can be b
 
 Here is a table of the custom components required:
 
-**Custom Imaging Chamber Parts**| | **Material** | **Supplier** | **Part #** | **Qty** | **£/unit** |**Total (£)**
-:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
- |||||/||
- Chamber base   || PMMA | Workshop / Protolabs |-|1|174.39|174.39
- Chamber insert || SS or Delrin | Workshop / Protolabs |-|1|144.21|144.21
- Tubing anchors || PMMA | Workshop / Protolabs |-|2|123.94|247.88
-  || | | | | **Subtotal**|**442.54**
-
-
-
   **Custom Imaging Chamber Parts**| **Material** |**Supplier**|**Part #**|**Qty**|**£/unit**|**Total (£)**
   :-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
   ||||||
   Chamber base | PMMA | Workshop / Protolabs | - | 1 |174.39|174.39
-  Chamber insert | PMMA | Workshop / Protolabs | - | 1 |144.21|144.21
+  Chamber insert | SS or Delrin ** | Workshop / Protolabs | - | 1 |144.21|144.21
   Tubing anchors | PMMA | Workshop / Protolabs | - | 2 |123.94|247.88
    ||||||
    | | | | |**Subtotal**|**442.54**
 
+** This part should be machined from stainless steel (SS) if the VasoTracker Temperature Controller is to be used. If other temperature control methods will be used (e.g. externally heated perfusion solution), this part can be machined from Delrin (POM-C)
 
 
 
