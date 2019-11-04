@@ -11,7 +11,7 @@ Commercial pressure myograph systems are expensive. Rather than buy one, we pref
 If you want to build your own myograph system, or simply want to try our software with an existing system, give VasoTracker a try. Its cheap (well its free) and it works.
 
 ## Paper
-A paper describing the system in full, and demonstrating its use for studying vascular activity will hopefully be published in the very near future. We will place a link to the paper here: [link](https://github.com/kaelome/VasoTracker)
+A paper describing the system in full, and demonstrating its use for studying vascular activity will hopefully be published in the very near future. We will place a link to the paper here: DOI:[10.3389/fphys.2019.00099](https://www.frontiersin.org/articles/10.3389/fphys.2019.00099/full)
 
 # Contributors:
 **University of Strathclyde:**
