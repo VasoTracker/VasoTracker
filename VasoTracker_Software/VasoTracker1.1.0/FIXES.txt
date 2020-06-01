@@ -1,0 +1,21 @@
+Problems I had making an exe:
+
+Had to install mkl
+installed gohelke numpy with mkl
+had to update tkinter.
+
+had to copy dlls from 
+C:\Users\xpb10145\AppData\Local\Continuum\anaconda2\pkgs\mkl-2018.0.3-intel_1\Library\bin
+to the build folder!
+
+https://www.youtube.com/watch?v=HosXxXE24hA
+https://www.codeblogbt.com/archives/153045
+https://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy
+https://stackoverflow.com/questions/34806650/cx-freeze-converted-gui-app-tkinter-crashes-after-pressing-plot-button/34893933#34893933
+
+
+Copy 
+
+C:\Users\xpb10145\AppData\Local\Continuum\anaconda2\Library\plugins
+
+to exe folder (https://stackoverflow.com/questions/44040630/could-not-find-or-load-the-qt-platform-plugin-windows-cx-freeze-exe-pyth)
