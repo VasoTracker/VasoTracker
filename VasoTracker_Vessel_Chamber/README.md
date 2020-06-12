@@ -94,4 +94,4 @@ Here are the other required components:
  10. Connect luer stopcock to each of the leur connectors to enable 3-way control of input and output.
  11. Securse bent needle perfusion plumbing in magnetic holders and the chamber is ready to be filled with physiological saline solution!
 
- <img src="https://https://github.com/VasoTracker/VasoTracker/blob/master/VasoTracker_Vessel_Chamber/Images/Cannula_Holder.jpg">
+ <img src="https://github.com/VasoTracker/VasoTracker/blob/master/VasoTracker_Vessel_Chamber/Images/Cannula_Holder.jpg">
