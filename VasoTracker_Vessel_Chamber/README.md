@@ -73,7 +73,7 @@ Here are the other required components:
 | Male luer (1/16" barb;   pack of 25)           | Cole-Palmer             | GY-45505-00 | 1   | 6.46     | 6.46      |
 | Luer stopcock (pack of 10)                     | Cole-Palmer             | WZ-30600-02 | 1   | 16.94    | 16.94     |
 |                                                |                         |             |     |          |           |
-|                                                |                         |             |     | Subtotal | 1278      |
+|                                                |                         |             |     | Subtotal | 712       |
 
 * Prices correct June 2020. Obviously, they are subject to change.
 
