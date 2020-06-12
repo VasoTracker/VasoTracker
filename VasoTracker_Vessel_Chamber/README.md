@@ -1,6 +1,6 @@
 VasoTracker Vessel Chamber
 ======
-<img src="https://github.com/kaelome/VasoTracker/blob/master/VasoTracker_Vessel_Chamber/Images/vasotracker_rev2_v2.png">
+<img src="https://github.com/kaelome/VasoTracker/blob/master/VasoTracker_Vessel_Chamber/Images/vasotracker_rev2_v2.jpg">
 
 THIS IS THE ORIGINAL VASOTRACKER CHAMBER. FOR THE LATEST VASOTRACKER CHAMBER DESIGN, CHECKOUT THE VASOTRACKER WEBSITE:
 http://www.vasotracker.com/downloads/pressure-myograph-hardware/
