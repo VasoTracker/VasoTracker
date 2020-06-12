@@ -2,12 +2,12 @@ VasoTracker Vessel Chamber
 ======
 <img src="https://github.com/VasoTracker/VasoTracker/blob/master/VasoTracker_Vessel_Chamber/Images/vasotracker_rev2_v2.jpg">
 
-THIS IS THE ORIGINAL VASOTRACKER CHAMBER. FOR THE LATEST VASOTRACKER CHAMBER DESIGN, CHECKOUT THE VASOTRACKER WEBSITE:
+THIS IS VERSION 2 OF THE  VASOTRACKER CHAMBER. WE MAY HAVE MORE UPDATES - CHECKOUT THE VASOTRACKER WEBSITE:
 http://www.vasotracker.com/downloads/pressure-myograph-hardware/
 
 A cheap but effective vessel chamber for pressure myography. This repository contains the source files required to manufacture the Vessel Chamber.
 
-These contents of this repository were designed using Creo Parametric 4.0. You'll need a copy of Creo if you want to make any changes to the .prt files. PTC offer a free student edition: https://www.ptc.com/en/academic-program/products/free-software. However, if you only are happy with the chamber as it is then the .step files are all you need.
+We provide Creo (.prt), Fusion 360 (.f3d), STEP, and STL files. However, our parts were designed using Creo Parametric 4.0.  You'd be best to get a copy of Creo if you want to make any changes to the .prt files. PTC offer a free student edition: https://www.ptc.com/en/academic-program/products/free-software. However, if you only are happy with the chamber as it is then the .step files are all you need.
 
 ## Features
 
@@ -15,28 +15,30 @@ These contents of this repository were designed using Creo Parametric 4.0. You'l
 
 * **Precise alignment of cannula via 3-axis manipulators**
 
-* **Compatible with Built-in heating system:** (https://github.com/kaelome/VasoTracker/tree/master/VasoTracker_Temperature_Controller)
-
 * **Magnetic mounts for perfusion plumbing and oxygenation**
 
 
+## Building the VasoTracker Chamber:
 
-## Building the VasoTracker Pressure Monitor:
-
-The VasoTracker pressure monitor (with two inline pressure transducers) can be built for ~ £1500. The main chamber has been custom designed and can be machined by in-house workshops or via commercial manufacturing services (e.g. Protolabs). Obviously, if you have access to a mechanical workshop, the system will be much cheaper than the price quoted below.
+The VasoTracker chamber can be built for less than £1500. The main chamber parts were custom designed and can be machined/3D-printed by in-house workshops or via commercial manufacturing services (e.g. Protolabs). Obviously, if you have access to a mechanical workshop, the system will be much cheaper than the price quoted below.
 
 Here is a table of the custom components required:
 
   **Custom Imaging Chamber Parts**| **Material** |**Supplier**|**Part #**|**Qty**|**£/unit**|**Total (£)**
   :-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:
   ||||||
-  Chamber base | PMMA | Workshop / Protolabs | - | 1 |174.39|174.39
-  Chamber insert | SS or Delrin ** | Workshop / Protolabs | - | 1 |144.21|144.21
-  Tubing anchors | PMMA | Workshop / Protolabs | - | 2 |123.94|247.88
+  Chamber base | POM-C/Delrin | Workshop / Protolabs | - | 1 |178.62|178.62
+  Chamber insert | POM-C/Delrin ** | Workshop / Protolabs | - | 1 |95.48|95.48
+  Leur connector blocks | POM-C/Delrin | Workshop / Protolabs | - | 2 |136.52|273.04
+  Cannula fixture A | PETG/PLA | 3D Print | - | 2 | - | -
+  Cannula fixture B | PETG/PLA | 3D Print | - | 2 | - | -
+  Cannula Lateral Bottom | PETG/PLA | 3D Print | - | 2 | - | -
+  Cannula Lateral Top | PETG/PLA | 3D Print | - | 2 | - | -
+  Magnetic plumbing holders | SS or Delrin ** | Workshop / Protolabs | - | 2 | - | -
    ||||||
    | | | | |**Subtotal**|**442.54**
 
-** This part should be machined from stainless steel (SS) if the VasoTracker Temperature Controller is to be used. If other temperature control methods will be used (e.g. externally heated perfusion solution), this part can be machined from Delrin (POM-C)
+* Prices correct June 2020. Obviously they aresubject to change.
 
 
 
