@@ -9,7 +9,7 @@
 ## 
 ## BSD 3-Clause License
 ## 
-## Copyright (c) 2018, VasoTracker
+## Copyright (c) 2020, VasoTracker
 ## All rights reserved.
 ## 
 ## Redistribution and use in source and binary forms, with or without
@@ -43,11 +43,11 @@
 ## Copyright: Copyright 2018, VasoTracker
 ## Credits: Penelope F Lawton, Matthew D Lee, and Calum Wilson
 ## License: BSD 3-Clause License
-## Version: 1.1.0
+## Version: 1.3.0
 ## Maintainer: Calum Wilson
 ## Email: vasotracker@gmail.com
 ## Status: Production
-## Last updated: 20191117
+## Last updated: 20200816
 ## 
 ##################################################
 
@@ -119,6 +119,12 @@ import matplotlib.pyplot as plt
 from matplotlib.backends import backend_qt4agg
 from matplotlib import pyplot
 from matplotlib.transforms import Bbox
+
+# Import nidaqmx
+import nidaqmx
+import PyDAQmx
+from PyDAQmx import Task
+
 
 #Disable garbage collection
 import gc
@@ -222,6 +228,21 @@ class GuiPart(tk.Frame):
             self.smooth_factor = int(parser.get('Analysis', 'Smooth'))# 1 # Scale setting
         except:
             self.smooth_factor = 21
+
+     # Set pressure setting
+        try:
+            self.set_pressure = int(parser.get('Pressure_Control', 'default_pressure'))# 1 # Scale setting
+            self.pressure_time_interval = int(parser.get('Pressure_Control', 'time_interval')) #minute
+            self.start_presure = int(parser.get('Pressure_Control', 'start_presure')) # mmHg
+            self.stop_pressure = int(parser.get('Pressure_Control', 'stop_pressure')) # mmHg
+            self.pressure_interval = int(parser.get('Pressure_Control', 'pressure_interval'))  # mmHg
+        
+        except:
+            self.set_pressure = 0
+            self.pressure_time_interval = 1
+            self.start_presure = 20
+            self.stop_pressure = 200
+            self.pressure_interval = 20
 
     # Integration setting
         try:
@@ -468,13 +489,18 @@ class GuiPart(tk.Frame):
     # Count function for reading in with FakeCamera
         self.count = 0   
     # Count function for resizing on first image acquisition
-        self.count2 = 0      
+        self.count2 = 0  
+    # Count function for pressure protocol
+        self.count3 = 0    
+    # Time Multiplier for pressure protocol
+        self.multiplier = 1
 
     # For storing data
         self.P1 = np.nan
         self.P2 = np.nan
         self.T = np.nan
         self.start_time = 0
+        self.pressure_start_time = 0
         self.prev_time = 0
         self.timelist = []
         self.outers = []
@@ -548,6 +574,75 @@ class GuiPart(tk.Frame):
                         mmc.setProperty('Focus', "Position", self.count%500)
                     except:
                         pass
+
+
+                    # Check if this is the first loop through with pressure protocol flag set
+                    if self.toolbar.pressure_protocol_flag:
+                        if self.count3 == 0:
+                            print "This done first time round"
+                            self.set_pressure = self.start_presure
+                            self.toolbar.set_pressure_contents.set(self.set_pressure)
+                            self.toolbar.update_set_pressure(1, table=False)
+
+                            self.pressure_start_time=time.time()
+
+
+                        # Add line to the table
+                            self.tableframe.table_text_entry.set("START     Pressure protocol (" + str(self.pressure_interval) + "mmHg/" + str(self.pressure_time_interval) +"s):") 
+                            self.tableframe.add_row()
+                        # Add line to the table
+                            self.tableframe.table_text_entry.set(str(self.set_pressure) + " mmHg")
+                            self.tableframe.add_row()
+
+                        self.pressure_timenow = int(time.time() - self.pressure_start_time+1)
+                        print "time now = ", time.time()
+                        print "Pressure start time = ", self.pressure_start_time
+                        print "Pressure time now = ", self.pressure_timenow
+
+                        # Increase pressure when time interval elapses
+                        
+                        self.seconds_interval = int(self.pressure_time_interval*self.multiplier)
+                        print "seconds_interval = ", self.seconds_interval
+                        self.count3 += 1
+                        if self.pressure_timenow%self.seconds_interval == 0:
+                            
+                            # End on last pressure value
+                            if self.set_pressure < self.stop_pressure:
+                                self.set_pressure = self.set_pressure + self.pressure_interval
+                                self.toolbar.set_pressure_contents.set(self.set_pressure)
+                                self.toolbar.update_set_pressure(1, table=False)
+                                self.multiplier += 1
+
+                             # Add line to the table
+                                self.tableframe.table_text_entry.set(str(self.set_pressure) + " mmHg")
+                                self.tableframe.add_row()
+                                
+
+                            elif self.set_pressure == self.stop_pressure:
+                                self.set_pressure = self.start_presure
+                                self.toolbar.set_pressure_contents.set(self.set_pressure)
+                                self.toolbar.update_set_pressure(1, table=False)
+
+                                self.toolbar.stop_pressure_protocol()
+
+                            # Add line to the table
+                                self.tableframe.table_text_entry.set("END Pressure protocol")
+                                self.tableframe.add_row()
+                            # Add line to the table
+                                self.tableframe.table_text_entry.set(str(self.set_pressure) + " mmHg")
+                                self.tableframe.add_row()
+
+                            print "the new pressure is thisL :", self.set_pressure
+                        
+                            '''
+                            self.set_pressure = 0
+                            self.time_interval = 1
+                            self.start_presure = 20
+                            self.stop_pressure = 200
+                            self.pressure_interval = 20
+                            '''
+                        
+
 
                 # Get the arduino data
                     #with self.timeit("Get Arduino"): # time for optimisation
@@ -671,6 +766,7 @@ class GuiPart(tk.Frame):
                     params = 0,0,0,0,0,0,0,0,0
                     self.cameraframe.process_queue(params,msg,self.count2)  
                 self.count2 += 1
+                
 
             else:
                 pass
@@ -774,6 +870,7 @@ class ToolBar(tk.Frame):
         self.mainWidgets()
         self.set_camera = setCamera(self,self.parent )
         self.ref_OD = None
+        self.task = Task()
 
     #Functions that do things in the toolbar
     def update_temp(self, temp):
@@ -996,6 +1093,19 @@ class ToolBar(tk.Frame):
 
         return self.start_flag
 
+    def start_pressure_protocol(self):
+        if self.start_flag:
+            print "this is doing something"
+            self.pressure_protocol_flag = True
+
+    def stop_pressure_protocol(self):
+        if self.start_flag:
+            print "this is doing something"
+            self.pressure_protocol_flag = False
+            self.parent.multiplier = 1
+            self.parent.count3 = 0
+
+
     def record_data(self):
         if self.start_flag == True:
             self.record_flag = True
@@ -1006,6 +1116,36 @@ class ToolBar(tk.Frame):
         self.caliper_length = caliper_length
         # Update the frames used for calculating data
         self.caliper_contents.set(str(round(caliper_length,2)))
+
+    def update_set_pressure(self,event, table=True):
+        try:
+        # Check if the exposure is within a suitable range
+            set_pressure = self.set_pressure_contents.get()
+            set_pressure = max(min(200, set_pressure), 0)
+
+            print "Set pressure is: ", set_pressure
+
+            self.set_pressure_entry.delete(0, 'end')
+            self.set_pressure_entry.insert('0', set_pressure) 
+            self.parent.set_pressure = set_pressure
+            self.set_pressure_prevcontents = set_pressure
+
+
+            self.task.WriteAnalogScalarF64(1,10.0,set_pressure/100,None)
+
+
+            # Add line to the table
+            if table:
+                self.parent.tableframe.table_text_entry.set("Set pressure = " + str(set_pressure) + " mmHg")
+                self.parent.tableframe.add_row()
+
+        except:
+            self.set_pressure_entry.delete(0, 'end')
+            self.set_pressure_entry.insert('0', self.set_pressure_prevcontents)
+            self.parent.set_pressure = set_pressure_prevcontents    
+
+
+
 
     def mainWidgets(self):
         self.toolbarview = ttk.Frame(self.parent.master, relief=RIDGE)
@@ -1036,6 +1176,10 @@ class ToolBar(tk.Frame):
         
         caliper_group = ttk.LabelFrame(self, text='Caliper', height=150, width=150)
         caliper_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
+
+
+        servo_group = ttk.LabelFrame(self, text='Pressure control', height=150, width=150)
+        servo_group.pack(side=LEFT, anchor=N, padx=3, fill=Y)
 
 
         # Camera width box
@@ -1594,6 +1738,7 @@ class ToolBar(tk.Frame):
 
     # Function that will start the data acquisition
         self.record_flag = False
+        self.pressure_protocol_flag = False
 
 
         def snapshot():
@@ -1654,6 +1799,70 @@ class ToolBar(tk.Frame):
 
         LINE_set_button = ttk.Button(caliper_group, text='Caliper stop', command= lambda: close_caliper_button_function(get_coords=True))
         LINE_set_button.grid(row=3,column=0, columnspan=1, pady=5)
+
+
+    # Pressure servo control group (servo_group)
+        def set_dev(self):
+            print self.dev_variable.get() 
+            print self.ao_variable.get()
+            try:
+                self.task.CreateAOVoltageChan("/"+self.dev_variable.get()+"/"+self.ao_variable.get(),"",-10.0,10.0,PyDAQmx.DAQmx_Val_Volts,None)
+                self.task.StartTask()
+                self.set_pressure_entry.configure(state="enabled")
+                
+            
+            except:
+                print "it did not connect"
+                tmb.showinfo("Warning", "Cannot connect to NI device. Have you plugged it in?")
+            self.update_set_pressure(1, table=False)
+
+
+        ni_dev_label = ttk.Label(servo_group, text = 'Device:')
+        ni_dev_label.grid(row=0, column=0, sticky=E)
+
+        self.dev_options = ["...","Dev0","Dev1", "Dev2"]
+
+        self.dev_variable = StringVar()
+        self.dev_variable.set(self.dev_options[0])
+        self.dev_entry = ttk.OptionMenu(servo_group, self.dev_variable,self.dev_options[0], *self.dev_options)#, command= lambda _: set_dev(self))
+        self.dev_entry.grid(row=0, column=1, pady=0)
+
+        ni_ao_label = ttk.Label(servo_group, text = 'ao channel:')
+        ni_ao_label.grid(row=1, column=0, sticky=E)
+
+        self.ao_options = ["...","ao0","ao1", "ao2"]
+
+        self.ao_variable = StringVar()
+        self.ao_variable.set(self.ao_options[0])
+        self.ao_entry = ttk.OptionMenu(servo_group, self.ao_variable,self.ao_options[0], *self.ao_options, command= lambda _: set_dev(self))
+        self.ao_entry.grid(row=1, column=1, pady=0)
+
+        # Pressure settings
+        set_pressure_label = ttk.Label(servo_group, text = 'Set pressure:')
+        set_pressure_label.grid(row=2, column=0, sticky=E)
+
+        set_pressure = self.parent.set_pressure
+        set_pressure = int(set_pressure)
+        self.set_pressure_contents = IntVar()
+        self.set_pressure_contents.set(set_pressure)
+        global set_pressure_prevcontents
+        set_pressure_prevcontents = self.set_pressure_contents.get()
+        self.set_pressure_entry = ttk.Entry(servo_group, textvariable = self.set_pressure_contents,width=10)
+        self.set_pressure_entry.grid(row=2, column=1, pady=0)
+        self.set_pressure_entry.bind('<Return>', self.update_set_pressure)
+        self.set_pressure_entry.configure(state="disabled")
+        
+        start_protocol_button = ttk.Button(servo_group, text='Start Protocol', command= lambda: self.start_pressure_protocol())
+        start_protocol_button.grid(row=3, column=0, pady=0, sticky=N+S+E+W) 
+        start_protocol_button.state(["disabled"])
+
+        stop_protocol_button = ttk.Button(servo_group, text='Stop Protocol', command= lambda: self.stop_pressure_protocol())
+        stop_protocol_button.grid(row=3, column=1, pady=0, sticky=N+S+E+W) 
+        start_protocol_button.state(["!disabled"])
+
+
+
+
 
 
 ##################################################
@@ -1792,108 +2001,106 @@ class TableFrame(tk.Frame):
         tk.Frame.__init__(self, parent)#,highlightthickness=2,highlightbackground="#111")#, width=250, height = 300)#, highlightthickness=2, highlightbackground="#111")
         self.parent = parent
         self.mainWidgets()
-              
+
+    def add_row(self):
+        try:
+            OutDiam = float(self.parent.OD)
+            InDiam = float(self.parent.ID)
+            caliper = float(self.parent.cameraframe.calibrated_caliper_distance)
+            #InDiam = float(ID)
+            Label = self.table_text_entry.get()
+            Time = (time.time() - self.parent.start_time)
+            Time = float(Time)
+            Time = round(Time, 1)
+            #mxDiastring = StringVar()
+            try:
+                self.max_diameter_text.set(round(self.parent.toolbar.ref_OD,2))
+                max_diameter = self.parent.toolbar.ref_OD
+            except:
+                self.max_diameter_text.set(np.nan)
+                max_diameter = np.nan
+            #max_diameter = max_diameter_text.set()
+            #max_diameter = int(max_diameter)
+            if max_diameter > 0:
+                max_diameter = float(max_diameter)
+                max_percent = ((float(OutDiam/max_diameter))*100)
+                max_percent = round(max_percent, 1)
+                self.table_1.insert('', 'end', values=(Time, Label, OutDiam,  max_percent, InDiam, caliper, self.parent.P1,self.parent.P2)) #P1, P2
+                hello = ((Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1, self.parent.P2))
+            
+            else:
+                max_percent = '-'
+                self.table_1.insert('', 'end', values=(Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1,self.parent.P2)) #P1, P2
+                hello = ((Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1, self.parent.P2))
+            
+            self.table_1.yview_moveto(1)
+
+        except ValueError:
+            max_percent = '-'
+            self.table_1.insert('', 'end', values=(Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1,self.parent.P2))
+            hello = ((Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1, self.parent.P2))
+        self.save_table(hello)
+
+    def save_table(self, hello):
+        with open((self.parent.txt_file), 'ab') as g:
+            w=csv.writer(g, quoting=csv.QUOTE_ALL)
+            w.writerow(hello)
+
     def mainWidgets(self):
+
         self.tableview = ttk.Frame(self)
         self.tableview.grid(row=1, column=3, sticky=N+S+E+W)
 
-        def add_row():
-            try:
-                OutDiam = float(self.parent.OD)
-                InDiam = float(self.parent.ID)
-                caliper = float(self.parent.cameraframe.calibrated_caliper_distance)
-                #InDiam = float(ID)
-                Label = table_text_entry.get()
-                Time = (time.time() - self.parent.start_time)
-                Time = float(Time)
-                Time = round(Time, 1)
-                #mxDiastring = StringVar()
-                try:
-                    self.max_diameter_text.set(round(self.parent.toolbar.ref_OD,2))
-                    max_diameter = self.parent.toolbar.ref_OD
-                except:
-                    self.max_diameter_text.set(np.nan)
-                    max_diameter = np.nan
-                #max_diameter = max_diameter_text.set()
-                #max_diameter = int(max_diameter)
-                if max_diameter > 0:
-                    max_diameter = float(max_diameter)
-                    max_percent = ((float(OutDiam/max_diameter))*100)
-                    max_percent = round(max_percent, 1)
-                    table_1.insert('', 'end', values=(Time, Label, OutDiam,  max_percent, InDiam, caliper, self.parent.P1,self.parent.P2)) #P1, P2
-                    hello = ((Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1, self.parent.P2))
-                
-                else:
-                    max_percent = '-'
-                    table_1.insert('', 'end', values=(Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1,self.parent.P2)) #P1, P2
-                    hello = ((Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1, self.parent.P2))
-                
-                table_1.yview_moveto(1)
-
-            except ValueError:
-                max_percent = '-'
-                table_1.insert('', 'end', values=(Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1,self.parent.P2))
-                hello = ((Time, Label, OutDiam, max_percent, InDiam, caliper, self.parent.P1, self.parent.P2))
-            save_table(hello)
-
-        table_text_entry = StringVar()
+        self.table_text_entry = StringVar()
         self.max_diameter_text = IntVar()
 
-
-        def save_table(hello):
-            with open((self.parent.txt_file), 'ab') as g:
-                w=csv.writer(g, quoting=csv.QUOTE_ALL)
-                w.writerow(hello)
-
-
-        table_text_entry = StringVar()
+        self.table_text_entry = StringVar()
         self.max_diameter_text = IntVar()
 
+        self.table_2 = tk.Frame(self.tableview)
+        self.table_2.grid(row=0, column=0, columnspan=5, sticky=N+S+E+W)
 
-        table_2 = tk.Frame(self.tableview)
-        table_2.grid(row=0, column=0, columnspan=5, sticky=N+S+E+W)
-
-        table_label = ttk.Label(table_2, text = 'Label:')
+        table_label = ttk.Label(self.table_2, text = 'Label:')
         table_label.grid(row=0, column=0)
-        table_entry = ttk.Entry(table_2, width=30, textvariable=table_text_entry )
+        table_entry = ttk.Entry(self.table_2, width=30, textvariable=self.table_text_entry )
         table_entry.grid(row=0, column=1)        
-        add_button = ttk.Button(table_2, text='Add', command=add_row)
+        add_button = ttk.Button(self.table_2, text='Add', command=self.add_row)
         add_button.grid(row=0, column=2)
-        max_diameter_label = ttk.Label(table_2, text='Reference Diameter:')
+        max_diameter_label = ttk.Label(self.table_2, text='Reference Diameter:')
         max_diameter_label.grid(row=0, column=3)
-        max_diameter_entry = ttk.Entry(table_2, width=10, textvariable=self.max_diameter_text )
+        max_diameter_entry = ttk.Entry(self.table_2, width=10, textvariable=self.max_diameter_text )
         max_diameter_entry.grid(row=0, column=4)
         max_diameter_entry.config(state=DISABLED)
 
        
         
-        table_1 = ttk.Treeview(self.tableview, show= 'headings')
-        table_1["columns"] = ('Time', 'Label', 'OD', '%OD ref', 'ID', 'Caliper', 'P1', 'P2')
+        self.table_1 = ttk.Treeview(self.tableview, show= 'headings')
+        self.table_1["columns"] = ('Time', 'Label', 'OD', '%OD ref', 'ID', 'Caliper', 'P1', 'P2')
 
-        table_1.column('#0', width=50)
-        table_1.column('Time', width=50, stretch=False)
-        table_1.column('Label', width=150)
-        table_1.column('OD', width=50)
-        table_1.column('%OD ref', width=75)
-        table_1.column('ID', width=50)
-        table_1.column('Caliper', width=50)
-        table_1.column('P1', width=50)
-        table_1.column('P2', width=50)
+        self.table_1.column('#0', width=50)
+        self.table_1.column('Time', width=50, stretch=False)
+        self.table_1.column('Label', width=150)
+        self.table_1.column('OD', width=50)
+        self.table_1.column('%OD ref', width=75)
+        self.table_1.column('ID', width=50)
+        self.table_1.column('Caliper', width=50)
+        self.table_1.column('P1', width=50)
+        self.table_1.column('P2', width=50)
 
-        table_1.heading('#1', text = 'Time')
-        table_1.heading('#2', text = 'Label')
-        table_1.heading('#3', text = 'OD')
-        table_1.heading('#4', text = '%OD ref')
-        table_1.heading('#5', text = 'ID')
-        table_1.heading('#6', text = 'Caliper')
-        table_1.heading('#7', text = 'P1')
-        table_1.heading('#8', text = 'P2')
+        self.table_1.heading('#1', text = 'Time')
+        self.table_1.heading('#2', text = 'Label')
+        self.table_1.heading('#3', text = 'OD')
+        self.table_1.heading('#4', text = '%OD ref')
+        self.table_1.heading('#5', text = 'ID')
+        self.table_1.heading('#6', text = 'Caliper')
+        self.table_1.heading('#7', text = 'P1')
+        self.table_1.heading('#8', text = 'P2')
 
 
         scrollbar = Scrollbar(self.tableview)
         scrollbar.grid(row=1,column=2, sticky=NS)
-        scrollbar.config( command = table_1.yview )
-        table_1.grid(row=1, column=1, sticky=N+S+E+W)
+        scrollbar.config( command = self.table_1.yview )
+        self.table_1.grid(row=1, column=1, sticky=N+S+E+W)
 
 
 ##################################################
@@ -2197,7 +2404,7 @@ class ThreadedClient:
     def periodicCall(self):
 
         if self.running:
-            print "size = ", self.queue.qsize(  )
+            #####print "size = ", self.queue.qsize(  )
             if self.queue.qsize(  ) > 0:
                 self.gui.processIncoming()
             else:

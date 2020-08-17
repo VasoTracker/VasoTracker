@@ -43,11 +43,11 @@
 ## Copyright: Copyright 2018, VasoTracker
 ## Credits: Penelope F Lawton, Matthew D Lee, and Calum Wilson
 ## License: BSD 3-Clause License
-## Version: 1.1.0
+## Version: 1.3.0
 ## Maintainer: Calum Wilson
 ## Email: vasotracker@gmail.com
 ## Status: Production
-## Last updated: 20191117
+## Last updated: 20200816
 ## 
 ##################################################
 
@@ -102,6 +102,6 @@ cx_Freeze.setup(
         options = {"build_exe": {"excludes": excludes,'includes': additional_mods, 
                     "packages":['skimage',"tkFileDialog","scipy","cv2","Tkinter", "matplotlib", "Queue","cytoolz"], 
                     "include_files":includefiles}},
-        version = "1.2.0",
+        version = "1.3.0",
         description = "Vasotracker Diameter Tracking",
         executables = executables    )
